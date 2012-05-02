@@ -56,20 +56,6 @@ main(int argc, char **argv)
 		exit(1);
 	}
 
-#ifdef IPCTL_DEFTTL
-	{
-		int mib[4] = { CTL_NET, PF_INET, IPPROTO_IP, IPCTL_DEFTTL };
-		size_t sz = sizeof(max_ttl);
-
-		if (sysctl(mib, 4, &max_ttl, &sz, NULL, 0) == -1) {
-			perror("sysctl(net.inet.ip.ttl)");
-			exit(1);
-		}
-	}
-#else
-	t->max_ttl = 30;
-#endif
-
 	/* Set requested port, if any, else default for this protocol */
 	t->port = (requestPort != -1) ? requestPort : t->proto->port;
 
