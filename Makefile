@@ -1,1 +1,1 @@
-traceroute: traceroute.c
+traceroute: traceroute.c main.c

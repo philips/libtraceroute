@@ -13,23 +13,7 @@
 #define ICMP_UNREACH_PRECEDENCE_CUTOFF	15	/* precedence cutoff */
 #endif
 
-/* Maximum number of gateways (include room for one noop) */
-#define NGATEWAYS ((int)((MAX_IPOPTLEN - IPOPT_MINOFF - 1) / sizeof(u_int32_t)))
-
-/* Host name and address list */
-struct hostinfo {
-	char *name;
-	int n;
-	u_int32_t *addrs;
-};
-
 /* Data section of the probe packet */
-struct outdata {
-	u_char seq;		/* sequence number of this packet */
-	u_char ttl;		/* ttl packet left with */
-	struct timeval tv;	/* time packet left */
-};
-
 #ifndef HAVE_ICMP_NEXTMTU
 /* Path MTU Discovery (RFC1191) */
 struct my_pmtu {
@@ -51,3 +35,65 @@ struct grehdr {
 
 /* For GRE, we prepare what looks like a PPTP packet */
 #define GRE_PPTP_PROTO	0x880b
+
+void	udp_prep(struct traceroute *, struct outdata *);
+int	udp_check(struct traceroute *, const u_char *, int);
+void	tcp_prep(struct traceroute *, struct outdata *);
+int	tcp_check(struct traceroute *, const u_char *, int);
+void	gre_prep(struct traceroute *, struct outdata *);
+int	gre_check(struct traceroute *, const u_char *, int);
+void	gen_prep(struct traceroute *, struct outdata *);
+int	gen_check(struct traceroute *, const u_char *, int);
+void	icmp_prep(struct traceroute *, struct outdata *);
+int	icmp_check(struct traceroute *, const u_char *, int);
+
+/* List of supported protocols. The first one is the default. The last
+   one is the handler for generic protocols not explicitly listed. */
+struct	outproto protos[] = {
+	{
+		"udp",
+		"spt dpt len sum",
+		IPPROTO_UDP,
+		sizeof(struct udphdr),
+		32768 + 666,
+		udp_prep,
+		udp_check
+	},
+	{
+		"tcp",
+		"spt dpt seq     ack     xxflwin sum urp",
+		IPPROTO_TCP,
+		sizeof(struct tcphdr),
+		32768 + 666,
+		tcp_prep,
+		tcp_check
+	},
+	{
+		"gre",
+		"flg pro len clid",
+		IPPROTO_GRE,
+		sizeof(struct grehdr),
+		GRE_PPTP_PROTO,
+		gre_prep,
+		gre_check
+	},
+	{
+		"icmp",
+		"typ cod sum ",
+		IPPROTO_ICMP,
+		sizeof(struct icmp),
+		0,
+		icmp_prep,
+		icmp_check
+	},
+	{
+		NULL,
+		NULL,
+		0,
+		2 * sizeof(u_short),
+		0,
+		gen_prep,
+		gen_check
+	},
+};
+
