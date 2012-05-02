@@ -18,7 +18,6 @@ main(int argc, char **argv)
 	int ttl, probe, i;
 	int seq = 0;
 	int tos = 0, settos = 0;
-	int lsrr = 0;
 	u_short off = 0;
 	struct ifaddrlist *al;
 	char errbuf[132];
@@ -37,6 +36,7 @@ main(int argc, char **argv)
 		    prog, devnull, strerror(errno));
 		exit(1);
 	}
+
 	/*
 	 * Do the setuid-required stuff first, then lose priveleges ASAP.
 	 * Do error checking for these two calls where they appeared in
@@ -83,8 +83,6 @@ main(int argc, char **argv)
 		exit(1);
 	}
 
-	if (lsrr > 0)
-		t->optlen = (lsrr + 1) * sizeof(t->gwlist[0]);
 	t->minpacket = sizeof(*t->outip) + t->proto->hdrlen + sizeof(struct outdata) + t->optlen;
 	t->packlen = t->minpacket;			/* minimum sized packet */
 
@@ -125,30 +123,7 @@ main(int argc, char **argv)
 #endif
 	t->outip->ip_p = t->proto->num;
 	t->outp = (u_char *)(t->outip + 1);
-#ifdef HAVE_RAW_OPTIONS
-	if (lsrr > 0) {
-		u_char *optlist;
-
-		optlist = outp;
-		outp += optlen;
-
-		/* final hop */
-		gwlist[lsrr] = to->sin_addr.s_addr;
-
-		outip->ip_dst.s_addr = gwlist[0];
-
-		/* force 4 byte alignment */
-		optlist[0] = IPOPT_NOP;
-		/* loose source route option */
-		optlist[1] = IPOPT_LSRR;
-		i = lsrr * sizeof(gwlist[0]);
-		optlist[2] = i + 3;
-		/* Pointer to LSRR addresses */
-		optlist[3] = IPOPT_MINOFF;
-		memcpy(optlist + 4, gwlist + 1, i);
-	} else
-#endif
-		t->outip->ip_dst = to->sin_addr;
+	t->outip->ip_dst = to->sin_addr;
 
 	t->outip->ip_hl = (t->outp - (u_char *)t->outip) >> 2;
 	t->ident = (getpid() & 0xffff) | 0x8000;
@@ -182,39 +157,6 @@ main(int argc, char **argv)
 		Fprintf(stderr, "%s: raw socket: %s\n", prog, strerror(errno));
 		exit(1);
 	}
-
-#if defined(IP_OPTIONS) && !defined(HAVE_RAW_OPTIONS)
-	if (lsrr > 0) {
-		u_char optlist[MAX_IPOPTLEN];
-
-		cp = "ip";
-		if ((pe = getprotobyname(cp)) == NULL) {
-			Fprintf(stderr, "%s: unknown protocol %s\n", prog, cp);
-			exit(1);
-		}
-
-		/* final hop */
-		t->gwlist[lsrr] = to->sin_addr.s_addr;
-		++lsrr;
-
-		/* force 4 byte alignment */
-		optlist[0] = IPOPT_NOP;
-		/* loose source route option */
-		optlist[1] = IPOPT_LSRR;
-		i = lsrr * sizeof(t->gwlist[0]);
-		optlist[2] = i + 3;
-		/* Pointer to LSRR addresses */
-		optlist[3] = IPOPT_MINOFF;
-		memcpy(optlist + 4, t->gwlist, i);
-
-		if ((setsockopt(t->sndsock, pe->p_proto, IP_OPTIONS,
-		    (char *)optlist, i + sizeof(t->gwlist[0]))) < 0) {
-			Fprintf(stderr, "%s: IP_OPTIONS: %s\n",
-			    prog, strerror(errno));
-			exit(1);
-		    }
-	}
-#endif
 
 #ifdef SO_SNDBUF
 	if (setsockopt(t->sndsock, SOL_SOCKET, SO_SNDBUF, (char *)&t->packlen,
