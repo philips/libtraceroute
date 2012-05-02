@@ -245,6 +245,8 @@ static const char rcsid[] =
 #include <string.h>
 #include <unistd.h>
 
+#include "traceroute.h"
+
 /* rfc1716 */
 #ifndef ICMP_UNREACH_FILTER_PROHIB
 #define ICMP_UNREACH_FILTER_PROHIB	13	/* admin prohibited filter */
@@ -344,11 +346,6 @@ int nflag;			/* print addresses numerically */
 int as_path;			/* print as numbers for each hop */
 char *as_server = NULL;
 void *asn;
-#ifdef CANT_HACK_IPCKSUM
-int doipcksum = 0;		/* don't calculate ip checksums by default */
-#else
-int doipcksum = 1;		/* calculate ip checksums by default */
-#endif
 int optlen;			/* length of ip options */
 int fixedPort = 0;		/* Use fixed destination port for TCP and UDP */
 int printdiff = 0;		/* Print the difference between sent and quoted */
@@ -629,10 +626,6 @@ main(int argc, char **argv)
 			++verbose;
 			break;
 
-		case 'x':
-			doipcksum = (doipcksum == 0);
-			break;
-
 		case 'w':
 			waittime = str2val(optarg, "wait time",
 			    1, 24 * 60 * 60);
@@ -659,9 +652,6 @@ main(int argc, char **argv)
 		    prog, first_ttl, max_ttl);
 		exit(1);
 	}
-
-	if (!doipcksum)
-		Fprintf(stderr, "%s: Warning: ip checksums disabled\n", prog);
 
 	if (lsrr > 0)
 		optlen = (lsrr + 1) * sizeof(gwlist[0]);
@@ -841,73 +831,9 @@ main(int argc, char **argv)
 		(void)setsockopt(sndsock, SOL_SOCKET, SO_DONTROUTE, (char *)&on,
 		    sizeof(on));
 
-	/* Get the interface address list */
-	n = ifaddrlist(&al, errbuf);
-	if (n < 0) {
-		Fprintf(stderr, "%s: ifaddrlist: %s\n", prog, errbuf);
-		exit(1);
-	}
-	if (n == 0) {
-		Fprintf(stderr,
-		    "%s: Can't find any network interfaces\n", prog);
-		exit(1);
-	}
-
-	/* Look for a specific device */
-	if (device != NULL) {
-		for (i = n; i > 0; --i, ++al)
-			if (strcmp(device, al->device) == 0)
-				break;
-		if (i <= 0) {
-			Fprintf(stderr, "%s: Can't find interface %.32s\n",
-			    prog, device);
-			exit(1);
-		}
-	}
-
-	/* Determine our source address */
-	if (source == NULL) {
-		/*
-		 * If a device was specified, use the interface address.
-		 * Otherwise, try to determine our source address.
-		 */
-		if (device != NULL)
-			setsin(from, al->addr);
-		else if ((err = findsaddr(to, from)) != NULL) {
-			Fprintf(stderr, "%s: findsaddr: %s\n",
-			    prog, err);
-			exit(1);
-		}
-	} else {
-		hi = gethostinfo(source);
-		source = hi->name;
-		hi->name = NULL;
-		/*
-		 * If the device was specified make sure it
-		 * corresponds to the source address specified.
-		 * Otherwise, use the first address (and warn if
-		 * there are more than one).
-		 */
-		if (device != NULL) {
-			for (i = hi->n, ap = hi->addrs; i > 0; --i, ++ap)
-				if (*ap == al->addr)
-					break;
-			if (i <= 0) {
-				Fprintf(stderr,
-				    "%s: %s is not on interface %.32s\n",
-				    prog, source, device);
-				exit(1);
-			}
-			setsin(from, *ap);
-		} else {
-			setsin(from, hi->addrs[0]);
-			if (hi->n > 1)
-				Fprintf(stderr,
-			"%s: Warning: %s has multiple addresses; using %s\n",
-				    prog, source, inet_ntoa(from->sin_addr));
-		}
-		freehostinfo(hi);
-	}
+	hi = gethostinfo(source);
+	source = hi->name;
+	hi->name = NULL;
 
 	outip->ip_src = from->sin_addr;
 
@@ -918,16 +844,6 @@ main(int argc, char **argv)
 		exit (1);
 	}
 
-	if (as_path) {
-		asn = as_setup(as_server);
-		if (asn == NULL) {
-			Fprintf(stderr, "%s: as_setup failed, AS# lookups"
-			    " disabled\n", prog);
-			(void)fflush(stderr);
-			as_path = 0;
-		}
-	}
-	
 #if	defined(IPSEC) && defined(IPSEC_POLICY_IPSEC)
 	if (setpolicy(sndsock, "in bypass") < 0)
 		errx(1, "%s", ipsec_strerror());
@@ -1132,8 +1048,6 @@ main(int argc, char **argv)
 		    (unreachable > 0 && unreachable >= nprobes - 1))
 			break;
 	}
-	if (as_path)
-		as_shutdown(asn);
 	exit(0);
 }
 
@@ -1378,10 +1292,6 @@ udp_prep(struct outdata *outdata)
 	outudp->uh_dport = htons(port + (fixedPort ? 0 : outdata->seq));
 	outudp->uh_ulen = htons((u_short)protlen);
 	outudp->uh_sum = 0;
-	if (doipcksum) {
-	    u_short sum = p_cksum(outip, (u_short*)outudp, protlen);
-	    outudp->uh_sum = (sum) ? sum : 0xffff;
-	}
 
 	return;
 }
@@ -1408,11 +1318,6 @@ tcp_prep(struct outdata *outdata)
 	tcp->th_off = 5;
 	tcp->th_flags = TH_SYN;
 	tcp->th_sum = 0;
-
-	if (doipcksum) {
-	    u_short sum = p_cksum(outip, (u_short*)tcp, protlen);
-	    tcp->th_sum = (sum) ? sum : 0xffff;
-	}
 }
 
 int
@@ -1474,10 +1379,7 @@ print(register u_char *buf, register int cc, register struct sockaddr_in *from)
 	hlen = ip->ip_hl << 2;
 	cc -= hlen;
 
-	strlcpy(addr, inet_ntoa(from->sin_addr), sizeof(addr));
-
-	if (as_path)
-		Printf(" [AS%u]", as_lookup(asn, addr, AF_INET));
+	strncpy(addr, inet_ntoa(from->sin_addr), sizeof(addr));
 
 	if (nflag)
 		Printf(" %s", addr);
@@ -1486,26 +1388,6 @@ print(register u_char *buf, register int cc, register struct sockaddr_in *from)
 
 	if (verbose)
 		Printf(" %d bytes to %s", cc, inet_ntoa (ip->ip_dst));
-}
-
-/*
- * Checksum routine for UDP and TCP headers.
- */
-u_short 
-p_cksum(struct ip *ip, u_short *data, int len)
-{
-	static struct ipovly ipo;
-	u_short sum[2];
-
-	ipo.ih_pr = ip->ip_p;
-	ipo.ih_len = htons(len);
-	ipo.ih_src = ip->ip_src;
-	ipo.ih_dst = ip->ip_dst;
-
-	sum[1] = in_cksum((u_short*)&ipo, sizeof(ipo)); /* pseudo ip hdr cksum */
-	sum[0] = in_cksum(data, len);                   /* payload data cksum */
-
-	return ~in_cksum(sum, sizeof(sum));
 }
 
 /*
@@ -1778,9 +1660,6 @@ pkt_compare(const u_char *a, int la, const u_char *b, int lb) {
 void
 usage(void)
 {
-	extern char version[];
-
-	Fprintf(stderr, "Version %s\n", version);
 	Fprintf(stderr,
 	    "Usage: %s [-adDeFInrSvx] [-f first_ttl] [-g gateway] [-i iface]\n"
 	    "\t[-m max_ttl] [-p port] [-P proto] [-q nqueries] [-s src_addr]\n"
