@@ -1362,7 +1362,6 @@ gethostinfo(const char *hostname)
 	char **p;
 	u_int32_t addr, *ap;
 
-	Fprintf(stderr, "len: %i\n", strlen(hostname));
 	if (strlen(hostname) >= MAXHOSTNAMELEN) {
 		Fprintf(stderr, "%s: hostname \"%.32s...\" is too long\n",
 		    prog, hostname);
