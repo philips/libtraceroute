@@ -153,3 +153,31 @@ struct hostinfo {
 struct traceroute * traceroute_alloc();
 void traceroute_init(struct traceroute *);
 struct hostinfo *gethostinfo(const char *hostname);
+
+/* Forwards */
+double	deltaT(struct timeval *, struct timeval *);
+void	freehostinfo(struct hostinfo *);
+void	getaddr(u_int32_t *, char *);
+struct	hostinfo *gethostinfo(const char *);
+u_short	in_cksum(u_short *, int);
+char	*inetname(struct traceroute *t, struct in_addr);
+int	main(int, char **);
+u_short p_cksum(struct ip *, u_short *, int);
+int	packet_ok(struct traceroute *t, u_char *, int, struct sockaddr_in *, int);
+char	*pr_type(u_char);
+void	print(struct traceroute *t, u_char *, int, struct sockaddr_in *);
+#ifdef	IPSEC
+int	setpolicy __P((int so, char *policy));
+#endif
+void	send_probe(struct traceroute *, int, int);
+struct outproto *setproto(char *);
+int	str2val(const char *, const char *, int, int);
+void	tvsub(struct timeval *, struct timeval *);
+void usage(void);
+int	wait_for_reply(struct traceroute *, int, struct sockaddr_in *, const struct timeval *);
+void pkt_compare(const u_char *, int, const u_char *, int);
+#ifndef HAVE_USLEEP
+int	usleep(u_int);
+#endif
+
+
