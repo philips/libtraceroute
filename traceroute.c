@@ -53,14 +53,14 @@ extern int opterr;
 extern char *optarg;
 
 int
-wait_for_reply(struct traceroute *t, register int sock, register struct sockaddr_in *fromp,
-    register const struct timeval *tp)
+wait_for_reply(struct traceroute *t, int sock, struct sockaddr_in *fromp,
+    const struct timeval *tp)
 {
 	fd_set *fdsp;
 	size_t nfds;
 	struct timeval now, wait;
-	register int cc = 0;
-	register int error;
+	int cc = 0;
+	int error;
 	int fromlen = sizeof(*fromp);
 
 	nfds = howmany(sock + 1, NFDBITS);
@@ -94,15 +94,15 @@ wait_for_reply(struct traceroute *t, register int sock, register struct sockaddr
 void
 send_probe(struct traceroute *t, int seq, int ttl)
 {
-	register int cc;
+	int cc;
 
 	t->outip->ip_ttl = ttl;
 	t->outip->ip_id = htons(t->ident + seq);
 
 	/* XXX undocumented debugging hack */
 	if (t->verbose > 1) {
-		register const u_short *sp;
-		register int nshorts, i;
+		const u_short *sp;
+		int nshorts, i;
 
 		sp = (u_short *)t->outip;
 		nshorts = (u_int)t->packlen / sizeof(u_short);
@@ -179,7 +179,7 @@ deltaT(struct timeval *t1p, struct timeval *t2p)
  * Convert an ICMP "type" field to a printable string.
  */
 char *
-pr_type(register u_char t)
+pr_type(u_char t)
 {
 	static char *ttab[] = {
 	"Echo Reply",	"ICMP 1",	"ICMP 2",	"Dest Unreachable",
@@ -196,14 +196,14 @@ pr_type(register u_char t)
 }
 
 int
-packet_ok(struct traceroute *t, register u_char *buf, int cc, register struct sockaddr_in *from,
-    register int seq)
+packet_ok(struct traceroute *t, u_char *buf, int cc, struct sockaddr_in *from,
+    int seq)
 {
-	register struct icmp *icp;
-	register u_char type, code;
-	register int hlen;
+	struct icmp *icp;
+	u_char type, code;
+	int hlen;
 #ifndef ARCHAIC
-	register struct ip *ip;
+	struct ip *ip;
 
 	ip = (struct ip *) buf;
 	hlen = ip->ip_hl << 2;
@@ -249,7 +249,7 @@ packet_ok(struct traceroute *t, register u_char *buf, int cc, register struct so
 	}
 #ifndef ARCHAIC
 	if (t->verbose) {
-		register int i;
+		int i;
 		u_int32_t *lp = (u_int32_t *)&icp->icmp_ip;
 
 		Printf("\n%d bytes from %s to ", cc, inet_ntoa(from->sin_addr));
@@ -371,10 +371,10 @@ gen_check(struct traceroute *t, const u_char *data, int seq)
 }
 
 void
-print(struct traceroute *t, register u_char *buf, register int cc, register struct sockaddr_in *from)
+print(struct traceroute *t, u_char *buf, int cc, struct sockaddr_in *from)
 {
-	register struct ip *ip;
-	register int hlen;
+	struct ip *ip;
+	int hlen;
 	char addr[INET_ADDRSTRLEN];
 
 	ip = (struct ip *) buf;
@@ -396,12 +396,12 @@ print(struct traceroute *t, register u_char *buf, register int cc, register stru
  * Checksum routine for Internet Protocol family headers (C Version)
  */
 u_short
-in_cksum(register u_short *addr, register int len)
+in_cksum(u_short *addr, int len)
 {
-	register int nleft = len;
-	register u_short *w = addr;
-	register u_short answer;
-	register int sum = 0;
+	int nleft = len;
+	u_short *w = addr;
+	u_short answer;
+	int sum = 0;
 
 	/*
 	 *  Our algorithm is simple, using a 32 bit accumulator (sum),
@@ -432,7 +432,7 @@ in_cksum(register u_short *addr, register int len)
  * Out is assumed to be within about LONG_MAX seconds of in.
  */
 void
-tvsub(register struct timeval *out, register struct timeval *in)
+tvsub(struct timeval *out, struct timeval *in)
 {
 
 	if ((out->tv_usec -= in->tv_usec) < 0)   {
@@ -450,8 +450,8 @@ tvsub(register struct timeval *out, register struct timeval *in)
 char *
 inetname(struct traceroute *t, struct in_addr in)
 {
-	register char *cp;
-	register struct hostent *hp;
+	char *cp;
+	struct hostent *hp;
 	static int first = 1;
 	static char domain[MAXHOSTNAMELEN + 1], line[MAXHOSTNAMELEN + 1];
 
@@ -547,7 +547,7 @@ gethostinfo(const char *hostname)
 }
 
 void
-freehostinfo(register struct hostinfo *hi)
+freehostinfo(struct hostinfo *hi)
 {
 	if (hi->name != NULL) {
 		free(hi->name);
@@ -558,9 +558,9 @@ freehostinfo(register struct hostinfo *hi)
 }
 
 void
-getaddr(register u_int32_t *ap, register char *hostname)
+getaddr(u_int32_t *ap, char *hostname)
 {
-	register struct hostinfo *hi;
+	struct hostinfo *hi;
 
 	hi = gethostinfo(hostname);
 	*ap = hi->addrs[0];
@@ -568,7 +568,7 @@ getaddr(register u_int32_t *ap, register char *hostname)
 }
 
 void
-setsin(register struct sockaddr_in *sin, register u_int32_t addr)
+setsin(struct sockaddr_in *sin, u_int32_t addr)
 {
 
 	memset(sin, 0, sizeof(*sin));
@@ -581,11 +581,11 @@ setsin(register struct sockaddr_in *sin, register u_int32_t addr)
 
 /* String to value with optional min and max. Handles decimal and hex. */
 int
-str2val(register const char *str, register const char *what,
-    register int mi, register int ma)
+str2val(const char *str, const char *what,
+    int mi, int ma)
 {
-	register const char *cp;
-	register int val;
+	const char *cp;
+	int val;
 	char *ep;
 
 	if (str[0] == '0' && (str[1] == 'x' || str[1] == 'X')) {

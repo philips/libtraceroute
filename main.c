@@ -6,20 +6,20 @@ int
 main(int argc, char **argv)
 {
 	struct traceroute *t = traceroute_alloc();
-	register int op, code, n;
-	register char *cp;
-	register const char *err;
-	register u_int32_t *ap;
-	register struct sockaddr_in *from = (struct sockaddr_in *)&t->wherefrom;
-	register struct sockaddr_in *to = (struct sockaddr_in *)&t->whereto;
-	register struct hostinfo *hi;
+	int op, code, n;
+	char *cp;
+	const char *err;
+	u_int32_t *ap;
+	struct sockaddr_in *from = (struct sockaddr_in *)&t->wherefrom;
+	struct sockaddr_in *to = (struct sockaddr_in *)&t->whereto;
+	struct hostinfo *hi;
 	int on = 1;
-	register struct protoent *pe;
-	register int ttl, probe, i;
-	register int seq = 0;
+	struct protoent *pe;
+	int ttl, probe, i;
+	int seq = 0;
 	int tos = 0, settos = 0;
-	register int lsrr = 0;
-	register u_short off = 0;
+	int lsrr = 0;
+	u_short off = 0;
 	struct ifaddrlist *al;
 	char errbuf[132];
 	int requestPort = -1;
@@ -127,7 +127,7 @@ main(int argc, char **argv)
 	t->outp = (u_char *)(t->outip + 1);
 #ifdef HAVE_RAW_OPTIONS
 	if (lsrr > 0) {
-		register u_char *optlist;
+		u_char *optlist;
 
 		optlist = outp;
 		outp += optlen;
@@ -280,9 +280,9 @@ main(int argc, char **argv)
 
 		Printf("%2d ", ttl);
 		for (probe = 0, loss = 0; probe < t->nprobes; ++probe) {
-			register int cc;
+			int cc;
 			struct timeval t1, t2;
-			register struct ip *ip;
+			struct ip *ip;
 			struct outdata outdata;
 
 			if (sentfirst && t->pausemsecs > 0)
