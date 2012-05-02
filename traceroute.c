@@ -45,7 +45,7 @@ traceroute_init(struct traceroute *t) {
 	t->waittime = 5;
 	t->as_server = NULL;
 	t->fixedPort = 0;
-	t->printdiff = 0;
+	t->nprobes = 3;
 }
 
 extern int optind;

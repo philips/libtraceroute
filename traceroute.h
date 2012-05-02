@@ -121,7 +121,6 @@ struct traceroute {
 	void *asn;
 	int optlen;			/* length of ip options */
 	int fixedPort;		/* Use fixed destination port for TCP and UDP */
-	int printdiff;		/* Print the difference between sent and quoted */
 };
 
 struct outdata {

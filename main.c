@@ -25,6 +25,7 @@ main(int argc, char **argv)
 	int sump = 0;
 	int sockerrno;
 	const char devnull[] = "/dev/null";
+	int printdiff = 0; /* Print the difference between sent and quoted */
 
 	traceroute_init(t);
 
@@ -53,19 +54,6 @@ main(int argc, char **argv)
 
 	if (setuid(getuid()) != 0) {
 		perror("setuid()");
-		exit(1);
-	}
-
-	/* Set requested port, if any, else default for this protocol */
-	t->port = (requestPort != -1) ? requestPort : t->proto->port;
-
-	if (t->nprobes == -1)
-		t->nprobes = t->printdiff ? 1 : 3;
-
-	if (t->first_ttl > t->max_ttl) {
-		Fprintf(stderr,
-		    "%s: first ttl (%d) may not be greater than max ttl (%d)\n",
-		    prog, t->first_ttl, t->max_ttl);
 		exit(1);
 	}
 
@@ -257,7 +245,7 @@ main(int argc, char **argv)
 #endif
 					precis = 3;
 				Printf("  %.*f ms", precis, T);
-				if (t->printdiff) {
+				if (printdiff) {
 					Printf("\n");
 					Printf("%*.*s%s\n",
 					    -(t->outip->ip_hl << 3),
