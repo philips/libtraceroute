@@ -1,4 +1,7 @@
-/*
+/* 
+ * Librarization done by Brandon Philips
+ * Copyright (c) 2012 Rackspace, Inc
+ *
  * Copyright (c) 1988, 1989, 1991, 1994, 1995, 1996, 1997, 1998, 1999, 2000
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -329,7 +332,8 @@ u_int pausemsecs;
 
 char *prog;
 char *source;
-char *hostname;
+static char host[] = "ifup.org";
+char *hostname = host;
 char *device;
 static const char devnull[] = "/dev/null";
 
@@ -358,7 +362,7 @@ extern char *optarg;
 double	deltaT(struct timeval *, struct timeval *);
 void	freehostinfo(struct hostinfo *);
 void	getaddr(u_int32_t *, char *);
-struct	hostinfo *gethostinfo(char *);
+struct	hostinfo *gethostinfo(const char *);
 u_short	in_cksum(u_short *, int);
 char	*inetname(struct in_addr);
 int	main(int, char **);
@@ -521,125 +525,6 @@ main(int argc, char **argv)
 	max_ttl = 30;
 #endif
 
-	if (argv[0] == NULL)
-		prog = "traceroute";
-	else if ((cp = strrchr(argv[0], '/')) != NULL)
-		prog = cp + 1;
-	else
-		prog = argv[0];
-
-	opterr = 0;
-	while ((op = getopt(argc, argv, "aA:edDFInrSvxf:g:i:M:m:P:p:q:s:t:w:z:")) != EOF)
-		switch (op) {
-		case 'a':
-			as_path = 1;
-			break;
-			
-		case 'A':
-			as_path = 1;
-			as_server = optarg;
-			break;
-			    
-		case 'd':
-			options |= SO_DEBUG;
-			break;
-
-		case 'D':
-			printdiff = 1;
-			break;
-
-		case 'e':
-			fixedPort = 1;
-			break;
-
-		case 'f':
-		case 'M':	/* FreeBSD compat. */
-			first_ttl = str2val(optarg, "first ttl", 1, 255);
-			break;
-
-		case 'F':
-			off = IP_DF;
-			break;
-
-		case 'g':
-			if (lsrr >= NGATEWAYS) {
-				Fprintf(stderr,
-				    "%s: No more than %d gateways\n",
-				    prog, NGATEWAYS);
-				exit(1);
-			}
-			getaddr(gwlist + lsrr, optarg);
-			++lsrr;
-			break;
-
-		case 'i':
-			device = optarg;
-			break;
-
-		case 'I':
-			proto = setproto("icmp");
-			break;
-
-		case 'm':
-			max_ttl = str2val(optarg, "max ttl", 1, 255);
-			break;
-
-		case 'n':
-			++nflag;
-			break;
-
-		case 'P':
-			proto = setproto(optarg);
-			break;
-
-		case 'p':
-			requestPort = (u_short)str2val(optarg, "port",
-			    1, (1 << 16) - 1);
-			break;
-
-		case 'q':
-			nprobes = str2val(optarg, "nprobes", 1, -1);
-			break;
-
-		case 'r':
-			options |= SO_DONTROUTE;
-			break;
-
-		case 's':
-			/*
-			 * set the ip source address of the outbound
-			 * probe (e.g., on a multi-homed host).
-			 */
-			source = optarg;
-			break;
-
-		case 'S':
-			sump = 1;
-			break;
-
-		case 't':
-			tos = str2val(optarg, "tos", 0, 255);
-			++settos;
-			break;
-
-		case 'v':
-			++verbose;
-			break;
-
-		case 'w':
-			waittime = str2val(optarg, "wait time",
-			    1, 24 * 60 * 60);
-			break;
-
-		case 'z':
-			pausemsecs = str2val(optarg, "pause msecs",
-			    0, 60 * 60 * 1000);
-			break;
-
-		default:
-			usage();
-		}
-
 	/* Set requested port, if any, else default for this protocol */
 	port = (requestPort != -1) ? requestPort : proto->port;
 
@@ -658,30 +543,15 @@ main(int argc, char **argv)
 	minpacket = sizeof(*outip) + proto->hdrlen + sizeof(struct outdata) + optlen;
 	packlen = minpacket;			/* minimum sized packet */
 
-	/* Process destination and optional packet size */
-	switch (argc - optind) {
-
-	case 2:
-		packlen = str2val(argv[optind + 1],
-		    "packet length", minpacket, maxpacket);
-		/* Fall through */
-
-	case 1:
-		hostname = argv[optind];
-		hi = gethostinfo(hostname);
-		setsin(to, hi->addrs[0]);
-		if (hi->n > 1)
-			Fprintf(stderr,
-		    "%s: Warning: %s has multiple addresses; using %s\n",
-				prog, hostname, inet_ntoa(to->sin_addr));
-		hostname = hi->name;
-		hi->name = NULL;
-		freehostinfo(hi);
-		break;
-
-	default:
-		usage();
-	}
+	hi = gethostinfo(hostname);
+	setsin(to, hi->addrs[0]);
+	if (hi->n > 1)
+		Fprintf(stderr,
+	    "%s: Warning: %s has multiple addresses; using %s\n",
+			prog, hostname, inet_ntoa(to->sin_addr));
+	hostname = hi->name;
+	hi->name = NULL;
+	freehostinfo(hi);
 
 #ifdef HAVE_SETLINEBUF
 	setlinebuf (stdout);
@@ -830,10 +700,6 @@ main(int argc, char **argv)
 	if (options & SO_DONTROUTE)
 		(void)setsockopt(sndsock, SOL_SOCKET, SO_DONTROUTE, (char *)&on,
 		    sizeof(on));
-
-	hi = gethostinfo(source);
-	source = hi->name;
-	hi->name = NULL;
 
 	outip->ip_src = from->sin_addr;
 
@@ -1488,14 +1354,15 @@ inetname(struct in_addr in)
 }
 
 struct hostinfo *
-gethostinfo(register char *hostname)
+gethostinfo(const char *hostname)
 {
-	register int n;
-	register struct hostent *hp;
-	register struct hostinfo *hi;
-	register char **p;
-	register u_int32_t addr, *ap;
+	int n;
+	struct hostent *hp;
+	struct hostinfo *hi;
+	char **p;
+	u_int32_t addr, *ap;
 
+	Fprintf(stderr, "len: %i\n", strlen(hostname));
 	if (strlen(hostname) >= MAXHOSTNAMELEN) {
 		Fprintf(stderr, "%s: hostname \"%.32s...\" is too long\n",
 		    prog, hostname);
@@ -1538,8 +1405,9 @@ gethostinfo(register char *hostname)
 		Fprintf(stderr, "%s: calloc %s\n", prog, strerror(errno));
 		exit(1);
 	}
-	for (ap = hi->addrs, p = hp->h_addr_list; *p != NULL; ++ap, ++p)
+	for (ap = hi->addrs, p = hp->h_addr_list; *p != NULL; ++ap, ++p) {
 		memcpy(ap, *p, sizeof(*ap));
+	}
 	return (hi);
 }
 
