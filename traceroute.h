@@ -24,3 +24,5 @@
 extern char *prog;
 
 void	setsin(struct sockaddr_in *, u_int32_t);
+
+
