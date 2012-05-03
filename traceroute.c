@@ -25,20 +25,21 @@
 #include "traceroute.h"
 #include "traceroute_private.h"
 
-struct	outproto *proto = &protos[0];
+
 
 struct traceroute *
-traceroute_alloc() {
+traceroute_alloc() 
+{
 	return calloc(1, sizeof(struct traceroute));
 }
 
 void
-traceroute_init(struct traceroute *t) {
-	t->proto = proto;
+traceroute_init(struct traceroute *t) 
+{
+	t->proto = &protos[0];
 	t->hip = NULL;
 	t->hiplen = 0;
 	t->maxpacket = 32 * 1024;
-	t->hostname = host;
 	t->nprobes = -1;
 	t->max_ttl = 30;
 	t->first_ttl = 1;
@@ -46,11 +47,26 @@ traceroute_init(struct traceroute *t) {
 	t->as_server = NULL;
 	t->fixedPort = 0;
 	t->nprobes = 3;
+	t->minpacket = sizeof(*t->outip) + t->proto->hdrlen + sizeof(struct outdata) + t->optlen;
+	t->packlen = t->minpacket;			/* minimum sized packet */
 }
 
-extern int optind;
-extern int opterr;
-extern char *optarg;
+int
+traceroute_set_hostname(struct traceroute *t, const char *hostname)
+{
+	struct hostinfo *hi;
+	struct sockaddr_in *to = (struct sockaddr_in *)&t->whereto;
+
+	hi = gethostinfo(hostname);
+	setsin(to, hi->addrs[0]);
+	if (hi->n > 1)
+		Fprintf(stderr,
+	    "%s: Warning: %s has multiple addresses; using %s\n",
+			prog, t->hostname, inet_ntoa(to->sin_addr));
+	t->hostname = hi->name;
+	hi->name = NULL;
+	freehostinfo(hi);
+}
 
 int
 wait_for_reply(struct traceroute *t, int sock, struct sockaddr_in *fromp,
@@ -231,8 +247,8 @@ packet_ok(struct traceroute *t, u_char *buf, int cc, struct sockaddr_in *from,
 #endif
 	}
 	if (type == ICMP_ECHOREPLY
-	    && proto->num == IPPROTO_ICMP
-	    && (*proto->check)(t, (u_char *)icp, (u_char)seq))
+	    && t->proto->num == IPPROTO_ICMP
+	    && (*t->proto->check)(t, (u_char *)icp, (u_char)seq))
 		return -2;
 	if ((type == ICMP_TIMXCEED && code == ICMP_TIMXCEED_INTRANS) ||
 	    type == ICMP_UNREACH) {
@@ -243,8 +259,8 @@ packet_ok(struct traceroute *t, u_char *buf, int cc, struct sockaddr_in *from,
 		hlen = t->hip->ip_hl << 2;
 		inner = (u_char *)((u_char *)t->hip + hlen);
 		if (hlen + 12 <= cc
-		    && t->hip->ip_p == proto->num
-		    && (*proto->check)(t, inner, (u_char)seq))
+		    && t->hip->ip_p == t->proto->num
+		    && (*t->proto->check)(t, inner, (u_char)seq))
 			return (type == ICMP_TIMXCEED ? -1 : code + 1);
 	}
 #ifndef ARCHAIC

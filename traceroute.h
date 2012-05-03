@@ -151,6 +151,8 @@ struct hostinfo {
 
 struct traceroute * traceroute_alloc();
 void traceroute_init(struct traceroute *);
+int traceroute_set_hostname(struct traceroute *t, const char *hostname);
+
 struct hostinfo *gethostinfo(const char *hostname);
 
 /* Forwards */

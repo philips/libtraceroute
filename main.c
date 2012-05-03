@@ -12,7 +12,6 @@ main(int argc, char **argv)
 	u_int32_t *ap;
 	struct sockaddr_in *from = (struct sockaddr_in *)&t->wherefrom;
 	struct sockaddr_in *to = (struct sockaddr_in *)&t->whereto;
-	struct hostinfo *hi;
 	int on = 1;
 	struct protoent *pe;
 	int ttl, probe, i;
@@ -26,8 +25,6 @@ main(int argc, char **argv)
 	int sockerrno;
 	const char devnull[] = "/dev/null";
 	int printdiff = 0; /* Print the difference between sent and quoted */
-
-	traceroute_init(t);
 
 	/* Insure the socket fds won't be 0, 1 or 2 */
 	if (open(devnull, O_RDONLY) < 0 ||
@@ -57,18 +54,13 @@ main(int argc, char **argv)
 		exit(1);
 	}
 
-	t->minpacket = sizeof(*t->outip) + t->proto->hdrlen + sizeof(struct outdata) + t->optlen;
-	t->packlen = t->minpacket;			/* minimum sized packet */
-
-	hi = gethostinfo(t->hostname);
-	setsin(to, hi->addrs[0]);
-	if (hi->n > 1)
-		Fprintf(stderr,
-	    "%s: Warning: %s has multiple addresses; using %s\n",
-			prog, t->hostname, inet_ntoa(to->sin_addr));
-	t->hostname = hi->name;
-	hi->name = NULL;
-	freehostinfo(hi);
+	traceroute_init(t);
+	if (argc == 2) {
+		traceroute_set_hostname(t, argv[1]);
+	} else {
+		fprintf(stderr, "usage: traceroute hostname\n");
+		return 1;
+	}
 
 #ifdef HAVE_SETLINEBUF
 	setlinebuf (stdout);
