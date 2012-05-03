@@ -10,10 +10,6 @@ main(int argc, char **argv)
 	char *cp;
 	const char *err;
 	u_int32_t *ap;
-	struct sockaddr_in *from = (struct sockaddr_in *)&t->wherefrom;
-	struct sockaddr_in *to = (struct sockaddr_in *)&t->whereto;
-	int on = 1;
-	struct protoent *pe;
 	int ttl, probe, i;
 	int seq = 0;
 	int tos = 0, settos = 0;
@@ -24,6 +20,7 @@ main(int argc, char **argv)
 	int sockerrno;
 	const char devnull[] = "/dev/null";
 	int printdiff = 0; /* Print the difference between sent and quoted */
+	int ret;
 
 	/* Insure the socket fds won't be 0, 1 or 2 */
 	if (open(devnull, O_RDONLY) < 0 ||
@@ -39,13 +36,11 @@ main(int argc, char **argv)
 	 * Do error checking for these two calls where they appeared in
 	 * the original code.
 	 */
-	cp = "icmp";
-	pe = getprotobyname(cp);
-	if (pe) {
-		if ((t->s = socket(AF_INET, SOCK_RAW, pe->p_proto)) < 0)
-			sockerrno = errno;
-		else if ((t->sndsock = socket(AF_INET, SOCK_RAW, IPPROTO_RAW)) < 0)
-			sockerrno = errno;
+	traceroute_init(t);
+	ret = traceroute_set_proto(t, "icmp");
+	if (ret != 0) {
+		fprintf(stderr, "traceroute_set_proto failed: %i\n", ret);
+		return ret;
 	}
 
 	if (setuid(getuid()) != 0) {
@@ -53,7 +48,6 @@ main(int argc, char **argv)
 		exit(1);
 	}
 
-	traceroute_init(t);
 	if (argc == 2) {
 		traceroute_set_hostname(t, argv[1]);
 	} else {
@@ -61,87 +55,16 @@ main(int argc, char **argv)
 		return 1;
 	}
 
+	ret = traceroute_bind(t);
+	if (ret != 0) {
+		fprintf(stderr, "traceroute_bind failed: %i\n", ret);
+		return ret;
+	}
+
 	setvbuf(stdout, NULL, _IOLBF, 0);
 
-	if (pe == NULL) {
-		Fprintf(stderr, "%s: unknown protocol %s\n", prog, cp);
-		exit(1);
-	}
-	if (t->s < 0) {
-		errno = sockerrno;
-		Fprintf(stderr, "%s: icmp socket: %s\n", prog, strerror(errno));
-		exit(1);
-	}
-	if (t->options & SO_DEBUG)
-		(void)setsockopt(t->s, SOL_SOCKET, SO_DEBUG, (char *)&on,
-		    sizeof(on));
-	if (t->options & SO_DONTROUTE)
-		(void)setsockopt(t->s, SOL_SOCKET, SO_DONTROUTE, (char *)&on,
-		    sizeof(on));
-
-#if	defined(IPSEC) && defined(IPSEC_POLICY_IPSEC)
-	if (setpolicy(s, "in bypass") < 0)
-		errx(1, "%s", ipsec_strerror());
-
-	if (setpolicy(s, "out bypass") < 0)
-		errx(1, "%s", ipsec_strerror());
-#endif	/* defined(IPSEC) && defined(IPSEC_POLICY_IPSEC) */
-
-	if (t->sndsock < 0) {
-		errno = sockerrno;
-		Fprintf(stderr, "%s: raw socket: %s\n", prog, strerror(errno));
-		exit(1);
-	}
-
-#ifdef SO_SNDBUF
-	if (setsockopt(t->sndsock, SOL_SOCKET, SO_SNDBUF, (char *)&t->packlen,
-	    sizeof(t->packlen)) < 0) {
-		Fprintf(stderr, "%s: SO_SNDBUF: %s\n", prog, strerror(errno));
-		exit(1);
-	}
-#endif
-#ifdef IP_HDRINCL
-	if (setsockopt(t->sndsock, IPPROTO_IP, IP_HDRINCL, (char *)&on,
-	    sizeof(on)) < 0) {
-		Fprintf(stderr, "%s: IP_HDRINCL: %s\n", prog, strerror(errno));
-		exit(1);
-	}
-#else
-#ifdef IP_TOS
-	if (settos && setsockopt(t->sndsock, IPPROTO_IP, IP_TOS,
-	    (char *)&tos, sizeof(tos)) < 0) {
-		Fprintf(stderr, "%s: setsockopt tos %d: %s\n",
-		    prog, tos, strerror(errno));
-		exit(1);
-	}
-#endif
-#endif
-	if (t->options & SO_DEBUG)
-		(void)setsockopt(t->sndsock, SOL_SOCKET, SO_DEBUG, (char *)&on,
-		    sizeof(on));
-	if (t->options & SO_DONTROUTE)
-		(void)setsockopt(t->sndsock, SOL_SOCKET, SO_DONTROUTE, (char *)&on,
-		    sizeof(on));
-
-	t->outip->ip_src = from->sin_addr;
-
-	/* Check the source address (-s), if any, is valid */
-	if (bind(t->sndsock, (struct sockaddr *)from, sizeof(*from)) < 0) {
-		Fprintf(stderr, "%s: bind: %s\n",
-		    prog, strerror(errno));
-		exit (1);
-	}
-
-#if	defined(IPSEC) && defined(IPSEC_POLICY_IPSEC)
-	if (setpolicy(t->sndsock, "in bypass") < 0)
-		errx(1, "%s", ipsec_strerror());
-
-	if (setpolicy(t->sndsock, "out bypass") < 0)
-		errx(1, "%s", ipsec_strerror());
-#endif	/* defined(IPSEC) && defined(IPSEC_POLICY_IPSEC) */
-
 	Fprintf(stderr, "%s to %s (%s)",
-	    prog, t->hostname, inet_ntoa(to->sin_addr));
+	    prog, t->hostname, inet_ntoa(t->to->sin_addr));
 	if (t->source)
 		Fprintf(stderr, " from %s", t->source);
 	Fprintf(stderr, ", %d hops max, %d byte packets\n", t->max_ttl, t->packlen);
@@ -178,20 +101,20 @@ main(int argc, char **argv)
 			++sentfirst;
 
 			/* Wait for a reply */
-			while ((cc = wait_for_reply(t, t->s, from, &t1)) != 0) {
+			while ((cc = wait_for_reply(t, t->s, t->from, &t1)) != 0) {
 				double T;
 				int precis;
 
 				(void)gettimeofday(&t2, NULL);
-				i = packet_ok(t, t->packet, cc, from, seq);
+				i = packet_ok(t, t->packet, cc, t->from, seq);
 				/* Skip short packet */
 				if (i == 0)
 					continue;
 				if (!gotlastaddr ||
-				    from->sin_addr.s_addr != lastaddr) {
+				    t->from->sin_addr.s_addr != lastaddr) {
 					if (gotlastaddr) printf("\n   ");
-					print(t, t->packet, cc, from);
-					lastaddr = from->sin_addr.s_addr;
+					print(t, t->packet, cc, t->from);
+					lastaddr = t->from->sin_addr.s_addr;
 					++gotlastaddr;
 				}
 				T = deltaT(&t1, &t2);

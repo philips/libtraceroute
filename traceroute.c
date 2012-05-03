@@ -61,13 +61,15 @@ traceroute__init_outip(struct traceroute *t)
 	t->outip->ip_dst = t->to->sin_addr;
 
 	t->outip->ip_hl = (t->outp - (u_char *)t->outip) >> 2;
+
+	t->outip->ip_src = t->from->sin_addr;
 }
 
 void
 traceroute_init(struct traceroute *t) 
 {
 	t->to = (struct sockaddr_in *)&t->whereto;
-	t->from = (struct sockaddr_in *)&t->whereto;
+	t->from = (struct sockaddr_in *)&t->wherefrom;
 	t->proto = &protos[0];
 	t->hip = NULL;
 	t->hiplen = 0;
@@ -103,6 +105,60 @@ traceroute_set_hostname(struct traceroute *t, const char *hostname)
 	hi->name = NULL;
 	freehostinfo(hi);
 	traceroute__init_outip(t);
+}
+
+int
+traceroute_set_proto(struct traceroute *t, const char *cp)
+{
+	struct protoent *pe;
+	int on = 1;
+
+	pe = getprotobyname(cp);
+	if (pe) {
+		if ((t->s = socket(AF_INET, SOCK_RAW, pe->p_proto)) < 0) {
+			Fprintf(stderr, "%s: icmp socket: %s\n", prog, strerror(errno));
+			return -errno;
+		} else if ((t->sndsock = socket(AF_INET, SOCK_RAW, IPPROTO_RAW)) < 0) {
+			Fprintf(stderr, "%s: raw socket: %s\n", prog, strerror(errno));
+			return -errno;
+		}
+	} else if (pe == NULL) {
+		Fprintf(stderr, "%s: unknown protocol %s\n", prog, cp);
+		return -EINVAL;
+	}
+
+	/* sndsock options */
+	if (t->options & SO_DEBUG)
+		(void)setsockopt(t->s, SOL_SOCKET, SO_DEBUG, (char *)&on,
+		    sizeof(on));
+	if (t->options & SO_DONTROUTE)
+		(void)setsockopt(t->s, SOL_SOCKET, SO_DONTROUTE, (char *)&on,
+		    sizeof(on));
+
+	/* sndsock options */
+	if (t->options & SO_DEBUG)
+		(void)setsockopt(t->sndsock, SOL_SOCKET, SO_DEBUG, (char *)&on,
+		    sizeof(on));
+	if (t->options & SO_DONTROUTE)
+		(void)setsockopt(t->sndsock, SOL_SOCKET, SO_DONTROUTE, (char *)&on,
+		    sizeof(on));
+
+	return 0;
+}
+
+int
+traceroute_bind(struct traceroute *t)
+{
+	int ret = 0;
+
+	if (t->from == NULL)
+		return -EINVAL;
+	if (t->sndsock == 0)
+		return -EINVAL;
+
+	ret = bind(t->sndsock, (struct sockaddr *)t->from, sizeof(*t->from));
+
+	return ret;
 }
 
 int
