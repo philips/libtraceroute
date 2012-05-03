@@ -61,6 +61,8 @@ main(int argc, char **argv)
 		return 1;
 	}
 
+	setvbuf(stdout, NULL, _IOLBF, 0);
+
 	if (pe == NULL) {
 		Fprintf(stderr, "%s: unknown protocol %s\n", prog, cp);
 		exit(1);
@@ -336,5 +338,3 @@ main(int argc, char **argv)
 	}
 	exit(0);
 }
-
-

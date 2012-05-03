@@ -38,6 +38,9 @@ traceroute__init_outip(struct traceroute *t)
 {
 	u_short off = 0;
 
+	if (t->outip == NULL)
+		free(t->outip);
+
 	t->outip = (struct ip *)malloc((unsigned)t->packlen);
 	if (t->outip == NULL) {
 		Fprintf(stderr, "%s: malloc: %s\n", prog, strerror(errno));
@@ -81,8 +84,6 @@ traceroute_init(struct traceroute *t)
 	t->packlen = t->minpacket;			/* minimum sized packet */
 	t->protlen = t->packlen - sizeof(*t->outip) - t->optlen;
 
-	traceroute__init_outip(t);
-
 	t->ident = (getpid() & 0xffff) | 0x8000;
 }
 
@@ -101,6 +102,7 @@ traceroute_set_hostname(struct traceroute *t, const char *hostname)
 	t->hostname = hi->name;
 	hi->name = NULL;
 	freehostinfo(hi);
+	traceroute__init_outip(t);
 }
 
 int
