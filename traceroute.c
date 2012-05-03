@@ -34,8 +34,37 @@ traceroute_alloc()
 }
 
 void
+traceroute__init_outip(struct traceroute *t)
+{
+	u_short off = 0;
+
+	t->outip = (struct ip *)malloc((unsigned)t->packlen);
+	if (t->outip == NULL) {
+		Fprintf(stderr, "%s: malloc: %s\n", prog, strerror(errno));
+		exit(1);
+	}
+	memset((char *)t->outip, 0, t->packlen);
+
+	t->outip->ip_v = IPVERSION;
+#ifdef BYTESWAP_IP_HDR
+	t->outip->ip_len = htons(packlen);
+	t->outip->ip_off = htons(off);
+#else
+	t->outip->ip_len = t->packlen;
+	t->outip->ip_off = off;
+#endif
+	t->outip->ip_p = t->proto->num;
+	t->outp = (u_char *)(t->outip + 1);
+	t->outip->ip_dst = t->to->sin_addr;
+
+	t->outip->ip_hl = (t->outp - (u_char *)t->outip) >> 2;
+}
+
+void
 traceroute_init(struct traceroute *t) 
 {
+	t->to = (struct sockaddr_in *)&t->whereto;
+	t->from = (struct sockaddr_in *)&t->whereto;
 	t->proto = &protos[0];
 	t->hip = NULL;
 	t->hiplen = 0;
@@ -47,8 +76,14 @@ traceroute_init(struct traceroute *t)
 	t->as_server = NULL;
 	t->fixedPort = 0;
 	t->nprobes = 3;
+
 	t->minpacket = sizeof(*t->outip) + t->proto->hdrlen + sizeof(struct outdata) + t->optlen;
 	t->packlen = t->minpacket;			/* minimum sized packet */
+	t->protlen = t->packlen - sizeof(*t->outip) - t->optlen;
+
+	traceroute__init_outip(t);
+
+	t->ident = (getpid() & 0xffff) | 0x8000;
 }
 
 int

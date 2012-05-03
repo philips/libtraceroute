@@ -24,9 +24,7 @@
 #define Fprintf (void)fprintf
 #define Printf (void)printf
 
-static char host[] = "ifup.org";
 static char prog[] = "traceroute";
-
 
 #define _BSD_SOURCE 
 
@@ -94,7 +92,9 @@ struct traceroute {
 
 	struct sockaddr whereto;	/* Who to try to reach */
 	struct sockaddr wherefrom;	/* Who we are */
-	int packlen;			/* total length of packet */
+	struct sockaddr_in *to;
+	struct sockaddr_in *from;
+	int packlen;                    /* total length of packet */
 	int protlen;			/* length of protocol part of packet */
 	int minpacket;			/* min ip packet size */
 	int maxpacket;	/* max ip packet size */

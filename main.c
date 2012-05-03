@@ -17,7 +17,6 @@ main(int argc, char **argv)
 	int ttl, probe, i;
 	int seq = 0;
 	int tos = 0, settos = 0;
-	u_short off = 0;
 	struct ifaddrlist *al;
 	char errbuf[132];
 	int requestPort = -1;
@@ -61,38 +60,6 @@ main(int argc, char **argv)
 		fprintf(stderr, "usage: traceroute hostname\n");
 		return 1;
 	}
-
-#ifdef HAVE_SETLINEBUF
-	setlinebuf (stdout);
-#else
-	setvbuf(stdout, NULL, _IOLBF, 0);
-#endif
-
-	t->protlen = t->packlen - sizeof(*t->outip) - t->optlen;
-
-	t->outip = (struct ip *)malloc((unsigned)t->packlen);
-	if (t->outip == NULL) {
-		Fprintf(stderr, "%s: malloc: %s\n", prog, strerror(errno));
-		exit(1);
-	}
-	memset((char *)t->outip, 0, t->packlen);
-
-	t->outip->ip_v = IPVERSION;
-	if (settos)
-		t->outip->ip_tos = tos;
-#ifdef BYTESWAP_IP_HDR
-	t->outip->ip_len = htons(packlen);
-	t->outip->ip_off = htons(off);
-#else
-	t->outip->ip_len = t->packlen;
-	t->outip->ip_off = off;
-#endif
-	t->outip->ip_p = t->proto->num;
-	t->outp = (u_char *)(t->outip + 1);
-	t->outip->ip_dst = to->sin_addr;
-
-	t->outip->ip_hl = (t->outp - (u_char *)t->outip) >> 2;
-	t->ident = (getpid() & 0xffff) | 0x8000;
 
 	if (pe == NULL) {
 		Fprintf(stderr, "%s: unknown protocol %s\n", prog, cp);
