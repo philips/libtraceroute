@@ -47,6 +47,9 @@ int	gen_check(struct traceroute *, const u_char *, int);
 void	icmp_prep(struct traceroute *, struct outdata *);
 int	icmp_check(struct traceroute *, const u_char *, int);
 
+static void send_probe(struct traceroute *, int, int);
+static double deltaT(struct timeval *t1p, struct timeval *t2p);
+
 /* List of supported protocols. The first one is the default. The last
    one is the handler for generic protocols not explicitly listed. */
 struct	outproto protos[] = {

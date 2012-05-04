@@ -74,13 +74,23 @@ void	setsin(struct sockaddr_in *, u_int32_t);
 /* Maximum number of gateways (include room for one noop) */
 #define NGATEWAYS ((int)((MAX_IPOPTLEN - IPOPT_MINOFF - 1) / sizeof(u_int32_t)))
 
+struct outdata {
+	u_char seq;		/* sequence number of this packet */
+	u_char ttl;		/* ttl packet left with */
+	struct timeval tv;	/* time packet left */
+};
+
 /* struct traceroute - describes a traceroute */
 struct traceroute {
 	struct outproto *proto;
 	u_char	packet[512];		/* last inbound (icmp) packet */
+	struct outdata outdata;
 
 	struct ip *outip;		/* last output ip packet */
 	u_char *outp;		/* last output inner protocol packet */
+
+	struct timeval timesent;
+	struct timeval timerecv;
 
 	struct ip *hip;		/* Quoted IP header */
 	int hiplen;
@@ -132,11 +142,14 @@ void traceroute_init(struct traceroute *);
 int traceroute_set_hostname(struct traceroute *t, const char *hostname);
 int traceroute_bind(struct traceroute *t);
 int traceroute_set_proto(struct traceroute *t, const char *cp);
+int traceroute_wait_for_reply(struct traceroute *);
+double traceroute_time_delta(struct traceroute *);
 
 /* struct traceroute_loop - describes a loop to do a traceroute probe */
 struct traceroute_loop {
 	struct traceroute *t;
 	int ttl;
+	int seq;
 };
 
 /* traceroute_loop methods */
@@ -145,15 +158,11 @@ void traceroute_loop_free(struct traceroute_loop *);
 
 void traceroute_loop_init(struct traceroute_loop *tl, struct traceroute *t);
 int traceroute_loop(struct traceroute_loop *);
+int traceroute_loop_send_next_probe(struct traceroute_loop *tl);
+
 
 #define TRACEROUTE_FOR_EACH_TTL(tl) \
 	 for (tl->ttl = tl->t->first_ttl; tl->ttl <= tl->t->max_ttl; tl->ttl++)
-
-struct outdata {
-	u_char seq;		/* sequence number of this packet */
-	u_char ttl;		/* ttl packet left with */
-	struct timeval tv;	/* time packet left */
-};
 
 /* Descriptor structure for each outgoing protocol we support */
 struct outproto {
@@ -179,7 +188,6 @@ struct hostinfo {
 struct hostinfo *gethostinfo(const char *hostname);
 
 /* Forwards */
-double	deltaT(struct timeval *, struct timeval *);
 void	freehostinfo(struct hostinfo *);
 void	getaddr(u_int32_t *, char *);
 struct	hostinfo *gethostinfo(const char *);
@@ -193,12 +201,10 @@ void	print(struct traceroute *t, u_char *, int, struct sockaddr_in *);
 #ifdef	IPSEC
 int	setpolicy __P((int so, char *policy));
 #endif
-void	send_probe(struct traceroute *, int, int);
 struct outproto *setproto(char *);
 int	str2val(const char *, const char *, int, int);
 void	tvsub(struct timeval *, struct timeval *);
 void usage(void);
-int	wait_for_reply(struct traceroute *, int, struct sockaddr_in *, const struct timeval *);
 void pkt_compare(const u_char *, int, const u_char *, int);
 #ifndef HAVE_USLEEP
 int	usleep(u_int);

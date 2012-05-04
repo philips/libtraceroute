@@ -165,6 +165,30 @@ traceroute_bind(struct traceroute *t)
 	return ret;
 }
 
+int
+traceroute_send_probe(struct traceroute *t, int ttl, int seq)
+{
+	struct outdata *o = &t->outdata;
+
+	/* Prepare outgoing data */
+	o->seq = seq;
+	o->ttl = ttl;
+
+	/* Avoid alignment problems by copying bytewise: */
+	(void)gettimeofday(&t->timesent, NULL);
+	memcpy(&o->tv, t, sizeof(o->tv));
+
+	/* Finalize and send packet */
+	(*t->proto->prepare)(t, o);
+	send_probe(t, seq, ttl);
+}
+
+double
+traceroute_time_delta(struct traceroute *t)
+{
+	return deltaT(&t->timesent, &t->timerecv);
+}
+
 struct traceroute_loop *
 traceroute_loop_alloc() 
 {
@@ -184,8 +208,6 @@ traceroute_loop_init(struct traceroute_loop *tl, struct traceroute *t)
 	tl->ttl = t->first_ttl;
 }
 
-
-
 int
 traceroute_loop(struct traceroute_loop *tl)
 {
@@ -200,15 +222,23 @@ traceroute_loop(struct traceroute_loop *tl)
 }
 
 int
-wait_for_reply(struct traceroute *t, int sock, struct sockaddr_in *fromp,
-    const struct timeval *tp)
+traceroute_loop_send_next_probe(struct traceroute_loop *tl)
+{
+	return traceroute_send_probe(tl->t, tl->ttl, ++tl->seq);
+}
+
+int
+traceroute_wait_for_reply(struct traceroute *t)
 {
 	fd_set *fdsp;
 	size_t nfds;
 	struct timeval now, wait;
 	int cc = 0;
 	int error;
-	int fromlen = sizeof(*fromp);
+	int fromlen = sizeof(*t->from);
+	int sock = t->s;
+	struct sockaddr_in *fromp = t->from;
+	struct timeval *tp = &t->timesent;
 
 	nfds = howmany(sock + 1, NFDBITS);
 	if ((fdsp = malloc(nfds * sizeof(fd_mask))) == NULL)
@@ -234,11 +264,14 @@ wait_for_reply(struct traceroute *t, int sock, struct sockaddr_in *fromp,
 		cc = recvfrom(sock, (char *)t->packet, sizeof(t->packet), 0,
 			    (struct sockaddr *)fromp, &fromlen);
 
+	if (cc != 0)
+		(void)gettimeofday(&t->timerecv, NULL);
+
 	free(fdsp);
 	return(cc);
 }
 
-void
+static void
 send_probe(struct traceroute *t, int seq, int ttl)
 {
 	int cc;

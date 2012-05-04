@@ -12,7 +12,6 @@ main(int argc, char **argv)
 	const char *err;
 	u_int32_t *ap;
 	int probe, i;
-	int seq = 0;
 	int tos = 0, settos = 0;
 	struct ifaddrlist *al;
 	char errbuf[132];
@@ -86,32 +85,21 @@ main(int argc, char **argv)
 		Printf("%2d ", tl->ttl);
 		for (probe = 0, loss = 0; probe < t->nprobes; ++probe) {
 			int cc;
-			struct timeval t1, t2;
 			struct ip *ip;
-			struct outdata outdata;
 
 			if (sentfirst && t->pausemsecs > 0)
 				usleep(t->pausemsecs * 1000);
-			/* Prepare outgoing data */
-			outdata.seq = ++seq;
-			outdata.ttl = tl->ttl;
-
-			/* Avoid alignment problems by copying bytewise: */
-			(void)gettimeofday(&t1, NULL);
-			memcpy(&outdata.tv, &t1, sizeof(outdata.tv));
-
-			/* Finalize and send packet */
-			(*t->proto->prepare)(t, &outdata);
-			send_probe(t, seq, tl->ttl);
 			++sentfirst;
 
+			traceroute_loop_send_next_probe(tl);
+
 			/* Wait for a reply */
-			while ((cc = wait_for_reply(t, t->s, t->from, &t1)) != 0) {
+			cc = traceroute_wait_for_reply(t);
+			while (cc != 0) {
 				double T;
 				int precis;
 
-				(void)gettimeofday(&t2, NULL);
-				i = packet_ok(t, t->packet, cc, t->from, seq);
+				i = packet_ok(t, t->packet, cc, t->from, tl->seq);
 				/* Skip short packet */
 				if (i == 0)
 					continue;
@@ -122,7 +110,7 @@ main(int argc, char **argv)
 					lastaddr = t->from->sin_addr.s_addr;
 					++gotlastaddr;
 				}
-				T = deltaT(&t1, &t2);
+				T = traceroute_time_delta(t);
 #ifdef SANE_PRECISION
 				if (T >= 1000.0)
 					precis = 0;
