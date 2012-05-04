@@ -74,6 +74,7 @@ void	setsin(struct sockaddr_in *, u_int32_t);
 /* Maximum number of gateways (include room for one noop) */
 #define NGATEWAYS ((int)((MAX_IPOPTLEN - IPOPT_MINOFF - 1) / sizeof(u_int32_t)))
 
+/* struct traceroute - describes a traceroute */
 struct traceroute {
 	struct outproto *proto;
 	u_char	packet[512];		/* last inbound (icmp) packet */
@@ -123,6 +124,31 @@ struct traceroute {
 	int fixedPort;		/* Use fixed destination port for TCP and UDP */
 };
 
+/* traceroute methods */
+struct traceroute * traceroute_alloc();
+void traceroute_free(struct traceroute *);
+
+void traceroute_init(struct traceroute *);
+int traceroute_set_hostname(struct traceroute *t, const char *hostname);
+int traceroute_bind(struct traceroute *t);
+int traceroute_set_proto(struct traceroute *t, const char *cp);
+
+/* struct traceroute_loop - describes a loop to do a traceroute probe */
+struct traceroute_loop {
+	struct traceroute *t;
+	int ttl;
+};
+
+/* traceroute_loop methods */
+struct traceroute_loop * traceroute_loop_alloc();
+void traceroute_loop_free(struct traceroute_loop *);
+
+void traceroute_loop_init(struct traceroute_loop *tl, struct traceroute *t);
+int traceroute_loop(struct traceroute_loop *);
+
+#define TRACEROUTE_FOR_EACH_TTL(tl) \
+	 for (tl->ttl = tl->t->first_ttl; tl->ttl <= tl->t->max_ttl; tl->ttl++)
+
 struct outdata {
 	u_char seq;		/* sequence number of this packet */
 	u_char ttl;		/* ttl packet left with */
@@ -149,11 +175,6 @@ struct hostinfo {
 	u_int32_t *addrs;
 };
 
-struct traceroute * traceroute_alloc();
-void traceroute_init(struct traceroute *);
-int traceroute_set_hostname(struct traceroute *t, const char *hostname);
-int traceroute_bind(struct traceroute *t);
-int traceroute_set_proto(struct traceroute *t, const char *cp);
 
 struct hostinfo *gethostinfo(const char *hostname);
 

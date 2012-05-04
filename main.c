@@ -6,11 +6,12 @@ int
 main(int argc, char **argv)
 {
 	struct traceroute *t = traceroute_alloc();
+	struct traceroute_loop *tl;
 	int op, code, n;
 	char *cp;
 	const char *err;
 	u_int32_t *ap;
-	int ttl, probe, i;
+	int probe, i;
 	int seq = 0;
 	int tos = 0, settos = 0;
 	struct ifaddrlist *al;
@@ -43,11 +44,6 @@ main(int argc, char **argv)
 		return ret;
 	}
 
-	if (setuid(getuid()) != 0) {
-		perror("setuid()");
-		exit(1);
-	}
-
 	if (argc == 2) {
 		traceroute_set_hostname(t, argv[1]);
 	} else {
@@ -61,8 +57,14 @@ main(int argc, char **argv)
 		return ret;
 	}
 
+	if (setuid(getuid()) != 0) {
+		perror("setuid()");
+		exit(1);
+	}
+
 	setvbuf(stdout, NULL, _IOLBF, 0);
 
+	/* Print out header */
 	Fprintf(stderr, "%s to %s (%s)",
 	    prog, t->hostname, inet_ntoa(t->to->sin_addr));
 	if (t->source)
@@ -70,7 +72,10 @@ main(int argc, char **argv)
 	Fprintf(stderr, ", %d hops max, %d byte packets\n", t->max_ttl, t->packlen);
 	(void)fflush(stderr);
 
-	for (ttl = t->first_ttl; ttl <= t->max_ttl; ++ttl) {
+	tl = traceroute_loop_alloc();
+	traceroute_loop_init(tl, t);
+
+	TRACEROUTE_FOR_EACH_TTL(tl) {
 		u_int32_t lastaddr = 0;
 		int gotlastaddr = 0;
 		int got_there = 0;
@@ -78,7 +83,7 @@ main(int argc, char **argv)
 		int sentfirst = 0;
 		int loss;
 
-		Printf("%2d ", ttl);
+		Printf("%2d ", tl->ttl);
 		for (probe = 0, loss = 0; probe < t->nprobes; ++probe) {
 			int cc;
 			struct timeval t1, t2;
@@ -89,7 +94,7 @@ main(int argc, char **argv)
 				usleep(t->pausemsecs * 1000);
 			/* Prepare outgoing data */
 			outdata.seq = ++seq;
-			outdata.ttl = ttl;
+			outdata.ttl = tl->ttl;
 
 			/* Avoid alignment problems by copying bytewise: */
 			(void)gettimeofday(&t1, NULL);
@@ -97,7 +102,7 @@ main(int argc, char **argv)
 
 			/* Finalize and send packet */
 			(*t->proto->prepare)(t, &outdata);
-			send_probe(t, seq, ttl);
+			send_probe(t, seq, tl->ttl);
 			++sentfirst;
 
 			/* Wait for a reply */
@@ -259,5 +264,7 @@ main(int argc, char **argv)
 		    (unreachable > 0 && unreachable >= t->nprobes - 1))
 			break;
 	}
+	traceroute_free(t);
+	traceroute_loop_free(tl);
 	exit(0);
 }

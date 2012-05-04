@@ -25,12 +25,16 @@
 #include "traceroute.h"
 #include "traceroute_private.h"
 
-
-
 struct traceroute *
 traceroute_alloc() 
 {
 	return calloc(1, sizeof(struct traceroute));
+}
+
+void
+traceroute_free(struct traceroute *t) 
+{
+	return free(t);
 }
 
 void
@@ -159,6 +163,40 @@ traceroute_bind(struct traceroute *t)
 	ret = bind(t->sndsock, (struct sockaddr *)t->from, sizeof(*t->from));
 
 	return ret;
+}
+
+struct traceroute_loop *
+traceroute_loop_alloc() 
+{
+	return calloc(1, sizeof(struct traceroute_loop));
+}
+
+void
+traceroute_loop_free(struct traceroute_loop *tl) 
+{
+	return free(tl);
+}
+
+void
+traceroute_loop_init(struct traceroute_loop *tl, struct traceroute *t)
+{
+	tl->t = t;
+	tl->ttl = t->first_ttl;
+}
+
+
+
+int
+traceroute_loop(struct traceroute_loop *tl)
+{
+	struct traceroute *t = tl->t;
+
+	if (tl->ttl <= t->max_ttl) {
+		tl->ttl++;
+		return 1;
+	}
+
+	return 0;
 }
 
 int
