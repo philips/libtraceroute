@@ -220,7 +220,7 @@ traceroute_wait_for_reply(struct traceroute *t)
 	tvsub(&wait, &now);
 	if (wait.tv_sec < 0) {
 		wait.tv_sec = 0;
-		wait.tv_usec = 1;
+		wait.tv_usec = 0;
 	}
 
 	error = select(sock + 1, fdsp, NULL, NULL, &wait);
@@ -344,21 +344,21 @@ pr_type(u_char t)
 }
 
 int
-packet_ok(struct traceroute *t, u_char *buf, int cc, struct sockaddr_in *from,
-    int seq)
+traceroute_packet_ok(struct traceroute *t, int cc)
 {
 	struct icmp *icp;
 	u_char type, code;
 	int hlen;
 #ifndef ARCHAIC
 	struct ip *ip;
+	void * buf = t->packet;
 
-	ip = (struct ip *) buf;
+	ip = (struct ip *) t->packet;
 	hlen = ip->ip_hl << 2;
 	if (cc < hlen + ICMP_MINLEN) {
 		if (t->verbose)
 			Printf("packet too short (%d bytes) from %s\n", cc,
-				inet_ntoa(from->sin_addr));
+				inet_ntoa(t->from->sin_addr));
 		return (0);
 	}
 	cc -= hlen;
@@ -380,7 +380,7 @@ packet_ok(struct traceroute *t, u_char *buf, int cc, struct sockaddr_in *from,
 	}
 	if (type == ICMP_ECHOREPLY
 	    && t->proto->num == IPPROTO_ICMP
-	    && (*t->proto->check)(t, (u_char *)icp, (u_char)seq))
+	    && (*t->proto->check)(t, (u_char *)icp, (u_char)t->seq))
 		return -2;
 	if ((type == ICMP_TIMXCEED && code == ICMP_TIMXCEED_INTRANS) ||
 	    type == ICMP_UNREACH) {
@@ -392,21 +392,10 @@ packet_ok(struct traceroute *t, u_char *buf, int cc, struct sockaddr_in *from,
 		inner = (u_char *)((u_char *)t->hip + hlen);
 		if (hlen + 12 <= cc
 		    && t->hip->ip_p == t->proto->num
-		    && (*t->proto->check)(t, inner, (u_char)seq))
+		    && (*t->proto->check)(t, inner, (u_char)t->seq))
 			return (type == ICMP_TIMXCEED ? -1 : code + 1);
 	}
-#ifndef ARCHAIC
-	if (t->verbose) {
-		int i;
-		u_int32_t *lp = (u_int32_t *)&icp->icmp_ip;
 
-		Printf("\n%d bytes from %s to ", cc, inet_ntoa(from->sin_addr));
-		Printf("%s: icmp type %d (%s) code %d\n",
-		    inet_ntoa(ip->ip_dst), type, pr_type(type), icp->icmp_code);
-		for (i = 4; i < cc ; i += sizeof(*lp))
-			Printf("%2d: x%8.8x\n", i, *lp++);
-	}
-#endif
 	return(0);
 }
 
@@ -727,41 +716,6 @@ setsin(struct sockaddr_in *sin, u_int32_t addr)
 	sin->sin_addr.s_addr = addr;
 }
 
-/* String to value with optional min and max. Handles decimal and hex. */
-int
-str2val(const char *str, const char *what,
-    int mi, int ma)
-{
-	const char *cp;
-	int val;
-	char *ep;
-
-	if (str[0] == '0' && (str[1] == 'x' || str[1] == 'X')) {
-		cp = str + 2;
-		val = (int)strtol(cp, &ep, 16);
-	} else
-		val = (int)strtol(str, &ep, 10);
-	if (*ep != '\0') {
-		Fprintf(stderr, "%s: \"%s\" bad value for %s \n",
-		    prog, str, what);
-		exit(1);
-	}
-	if (val < mi && mi >= 0) {
-		if (mi == 0)
-			Fprintf(stderr, "%s: %s must be >= %d\n",
-			    prog, what, mi);
-		else
-			Fprintf(stderr, "%s: %s must be > %d\n",
-			    prog, what, mi - 1);
-		exit(1);
-	}
-	if (val > ma && ma >= 0) {
-		Fprintf(stderr, "%s: %s must be <= %d\n", prog, what, ma);
-		exit(1);
-	}
-	return (val);
-}
-
 struct outproto *
 setproto(char *pname)
 {
@@ -782,38 +736,8 @@ setproto(char *pname)
 		if ((pe = getprotobyname(pname)) != NULL)
 			pnum = pe->p_proto;
 		else
-			pnum = str2val(optarg, "proto number", 1, 255);
+			return NULL;
 		proto->num = pnum;
 	}
 	return proto;
-}
-
-void
-pkt_compare(const u_char *a, int la, const u_char *b, int lb) {
-	int l;
-	int i;
-
-	for (i = 0; i < la; i++)
-		Printf("%02x", (unsigned int)a[i]);
-	Printf("\n");
-	l = (la <= lb) ? la : lb;
-	for (i = 0; i < l; i++)
-		if (a[i] == b[i])
-			Printf("__");
-		else
-			Printf("%02x", (unsigned int)b[i]);
-	for (; i < lb; i++)
-		Printf("%02x", (unsigned int)b[i]);
-	Printf("\n");
-}
-
-
-void
-usage(void)
-{
-	Fprintf(stderr,
-	    "Usage: %s [-adDeFInrSvx] [-f first_ttl] [-g gateway] [-i iface]\n"
-	    "\t[-m max_ttl] [-p port] [-P proto] [-q nqueries] [-s src_addr]\n"
-	    "\t[-t tos] [-w waittime] [-A as_server] [-z pausemsecs] host [packetlen]\n", prog);
-	exit(1);
 }

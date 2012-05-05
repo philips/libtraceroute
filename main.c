@@ -2,6 +2,36 @@
 
 const char *ip_hdr_key = "vhtslen id  off tlprsum srcip   dstip   opts";
 
+void
+pkt_compare(const u_char *a, int la, const u_char *b, int lb) {
+	int l;
+	int i;
+
+	for (i = 0; i < la; i++)
+		Printf("%02x", (unsigned int)a[i]);
+	Printf("\n");
+	l = (la <= lb) ? la : lb;
+	for (i = 0; i < l; i++)
+		if (a[i] == b[i])
+			Printf("__");
+		else
+			Printf("%02x", (unsigned int)b[i]);
+	for (; i < lb; i++)
+		Printf("%02x", (unsigned int)b[i]);
+	Printf("\n");
+}
+
+
+void
+usage(void)
+{
+	Fprintf(stderr,
+	    "Usage: %s [-adDeFInrSvx] [-f first_ttl] [-g gateway] [-i iface]\n"
+	    "\t[-m max_ttl] [-p port] [-P proto] [-q nqueries] [-s src_addr]\n"
+	    "\t[-t tos] [-w waittime] [-A as_server] [-z pausemsecs] host [packetlen]\n", prog);
+	exit(1);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -76,10 +106,10 @@ main(int argc, char **argv)
 		int got_there = 0;
 		int unreachable = 0;
 		int sentfirst = 0;
-		int loss;
+		int loss = 0;;
 
 		Printf("%2d ", t->ttl);
-		for (probe = 0, loss = 0; probe < t->nprobes; ++probe) {
+		for (probe = 0; probe < t->nprobes; ++probe) {
 			int cc;
 			struct ip *ip;
 
@@ -95,7 +125,7 @@ main(int argc, char **argv)
 				double T;
 				int precis;
 
-				i = packet_ok(t, t->packet, cc, t->from, t->seq);
+				i = traceroute_packet_ok(t, cc);
 				/* Skip short packet */
 				if (i == 0)
 					continue;

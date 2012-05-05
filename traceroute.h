@@ -147,6 +147,7 @@ int traceroute_set_proto(struct traceroute *t, const char *cp);
 int traceroute_wait_for_reply(struct traceroute *);
 double traceroute_time_delta(struct traceroute *);
 int traceroute_send_next_probe(struct traceroute *);
+int traceroute_packet_ok(struct traceroute *t, int);
 
 #define TRACEROUTE_FOR_EACH_TTL(t) \
 	 for (t->ttl = t->first_ttl; t->ttl <= t->max_ttl; t->ttl++)
@@ -182,7 +183,6 @@ u_short	in_cksum(u_short *, int);
 char	*inetname(struct traceroute *t, struct in_addr);
 int	main(int, char **);
 u_short p_cksum(struct ip *, u_short *, int);
-int	packet_ok(struct traceroute *t, u_char *, int, struct sockaddr_in *, int);
 char	*pr_type(u_char);
 void	print(struct traceroute *t, u_char *, int, struct sockaddr_in *);
 #ifdef	IPSEC
