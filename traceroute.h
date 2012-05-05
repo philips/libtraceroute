@@ -132,6 +132,8 @@ struct traceroute {
 	void *asn;
 	int optlen;			/* length of ip options */
 	int fixedPort;		/* Use fixed destination port for TCP and UDP */
+	int ttl;
+	int seq;
 };
 
 /* traceroute methods */
@@ -144,25 +146,10 @@ int traceroute_bind(struct traceroute *t);
 int traceroute_set_proto(struct traceroute *t, const char *cp);
 int traceroute_wait_for_reply(struct traceroute *);
 double traceroute_time_delta(struct traceroute *);
+int traceroute_send_next_probe(struct traceroute *);
 
-/* struct traceroute_loop - describes a loop to do a traceroute probe */
-struct traceroute_loop {
-	struct traceroute *t;
-	int ttl;
-	int seq;
-};
-
-/* traceroute_loop methods */
-struct traceroute_loop * traceroute_loop_alloc();
-void traceroute_loop_free(struct traceroute_loop *);
-
-void traceroute_loop_init(struct traceroute_loop *tl, struct traceroute *t);
-int traceroute_loop(struct traceroute_loop *);
-int traceroute_loop_send_next_probe(struct traceroute_loop *tl);
-
-
-#define TRACEROUTE_FOR_EACH_TTL(tl) \
-	 for (tl->ttl = tl->t->first_ttl; tl->ttl <= tl->t->max_ttl; tl->ttl++)
+#define TRACEROUTE_FOR_EACH_TTL(t) \
+	 for (t->ttl = t->first_ttl; t->ttl <= t->max_ttl; t->ttl++)
 
 /* Descriptor structure for each outgoing protocol we support */
 struct outproto {

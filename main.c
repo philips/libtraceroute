@@ -6,7 +6,6 @@ int
 main(int argc, char **argv)
 {
 	struct traceroute *t = traceroute_alloc();
-	struct traceroute_loop *tl;
 	int op, code, n;
 	char *cp;
 	const char *err;
@@ -71,10 +70,7 @@ main(int argc, char **argv)
 	Fprintf(stderr, ", %d hops max, %d byte packets\n", t->max_ttl, t->packlen);
 	(void)fflush(stderr);
 
-	tl = traceroute_loop_alloc();
-	traceroute_loop_init(tl, t);
-
-	TRACEROUTE_FOR_EACH_TTL(tl) {
+	TRACEROUTE_FOR_EACH_TTL(t) {
 		u_int32_t lastaddr = 0;
 		int gotlastaddr = 0;
 		int got_there = 0;
@@ -82,7 +78,7 @@ main(int argc, char **argv)
 		int sentfirst = 0;
 		int loss;
 
-		Printf("%2d ", tl->ttl);
+		Printf("%2d ", t->ttl);
 		for (probe = 0, loss = 0; probe < t->nprobes; ++probe) {
 			int cc;
 			struct ip *ip;
@@ -91,7 +87,7 @@ main(int argc, char **argv)
 				usleep(t->pausemsecs * 1000);
 			++sentfirst;
 
-			traceroute_loop_send_next_probe(tl);
+			traceroute_send_next_probe(t);
 
 			/* Wait for a reply */
 			cc = traceroute_wait_for_reply(t);
@@ -99,7 +95,7 @@ main(int argc, char **argv)
 				double T;
 				int precis;
 
-				i = packet_ok(t, t->packet, cc, t->from, tl->seq);
+				i = packet_ok(t, t->packet, cc, t->from, t->seq);
 				/* Skip short packet */
 				if (i == 0)
 					continue;
@@ -253,6 +249,5 @@ main(int argc, char **argv)
 			break;
 	}
 	traceroute_free(t);
-	traceroute_loop_free(tl);
 	exit(0);
 }

@@ -183,48 +183,16 @@ traceroute_send_probe(struct traceroute *t, int ttl, int seq)
 	send_probe(t, seq, ttl);
 }
 
+int
+traceroute_send_next_probe(struct traceroute *t)
+{
+       return traceroute_send_probe(t, t->ttl, ++t->seq);
+}
+
 double
 traceroute_time_delta(struct traceroute *t)
 {
 	return deltaT(&t->timesent, &t->timerecv);
-}
-
-struct traceroute_loop *
-traceroute_loop_alloc() 
-{
-	return calloc(1, sizeof(struct traceroute_loop));
-}
-
-void
-traceroute_loop_free(struct traceroute_loop *tl) 
-{
-	return free(tl);
-}
-
-void
-traceroute_loop_init(struct traceroute_loop *tl, struct traceroute *t)
-{
-	tl->t = t;
-	tl->ttl = t->first_ttl;
-}
-
-int
-traceroute_loop(struct traceroute_loop *tl)
-{
-	struct traceroute *t = tl->t;
-
-	if (tl->ttl <= t->max_ttl) {
-		tl->ttl++;
-		return 1;
-	}
-
-	return 0;
-}
-
-int
-traceroute_loop_send_next_probe(struct traceroute_loop *tl)
-{
-	return traceroute_send_probe(tl->t, tl->ttl, ++tl->seq);
 }
 
 int
