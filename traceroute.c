@@ -106,6 +106,8 @@ traceroute_set_hostname(struct traceroute *t, const char *hostname)
 	struct sockaddr_in *to = (struct sockaddr_in *)&t->whereto;
 
 	hi = gethostinfo(hostname);
+	if (hi == NULL)
+		return -1;
 	setsin(to, hi->addrs[0]);
 	t->hostname = hi->name;
 	hi->name = NULL;
@@ -113,7 +115,7 @@ traceroute_set_hostname(struct traceroute *t, const char *hostname)
 
 	outip = traceroute__init_outip(t);
 	if (outip == NULL)
-		return -1;
+		return -2;
 
 	return 0;
 }
