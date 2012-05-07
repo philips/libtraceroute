@@ -69,8 +69,6 @@ static char prog[] = "traceroute";
 #include <string.h>
 #include <unistd.h>
 
-void	setsin(struct sockaddr_in *, u_int32_t);
-
 /* Maximum number of gateways (include room for one noop) */
 #define NGATEWAYS ((int)((MAX_IPOPTLEN - IPOPT_MINOFF - 1) / sizeof(u_int32_t)))
 
@@ -148,6 +146,7 @@ int traceroute_wait_for_reply(struct traceroute *);
 double traceroute_time_delta(struct traceroute *);
 int traceroute_send_next_probe(struct traceroute *);
 int traceroute_packet_ok(struct traceroute *t, int);
+char *traceroute_inetname(struct traceroute *t, struct in_addr);
 
 #define TRACEROUTE_FOR_EACH_TTL(t) \
 	 for (t->ttl = t->first_ttl; t->ttl <= t->max_ttl; t->ttl++)
@@ -172,29 +171,5 @@ struct hostinfo {
 	u_int32_t *addrs;
 };
 
-
-struct hostinfo *gethostinfo(const char *hostname);
-
-/* Forwards */
-void	freehostinfo(struct hostinfo *);
-void	getaddr(u_int32_t *, char *);
-struct	hostinfo *gethostinfo(const char *);
-u_short	in_cksum(u_short *, int);
-char	*inetname(struct traceroute *t, struct in_addr);
-int	main(int, char **);
-u_short p_cksum(struct ip *, u_short *, int);
-char	*pr_type(u_char);
-void	print(struct traceroute *t, u_char *, int, struct sockaddr_in *);
-#ifdef	IPSEC
-int	setpolicy __P((int so, char *policy));
-#endif
-struct outproto *setproto(char *);
-int	str2val(const char *, const char *, int, int);
-void	tvsub(struct timeval *, struct timeval *);
-void usage(void);
-void pkt_compare(const u_char *, int, const u_char *, int);
-#ifndef HAVE_USLEEP
-int	usleep(u_int);
-#endif
 
 

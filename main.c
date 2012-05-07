@@ -21,6 +21,27 @@ pkt_compare(const u_char *a, int la, const u_char *b, int lb) {
 	Printf("\n");
 }
 
+void
+print(struct traceroute *t, u_char *buf, int cc, struct sockaddr_in *from)
+{
+	struct ip *ip;
+	int hlen;
+	char addr[INET_ADDRSTRLEN];
+
+	ip = (struct ip *) buf;
+	hlen = ip->ip_hl << 2;
+	cc -= hlen;
+
+	strncpy(addr, inet_ntoa(from->sin_addr), sizeof(addr));
+
+	if (t->nflag)
+		Printf(" %s", addr);
+	else
+		Printf(" %s (%s)", traceroute_inetname(t, from->sin_addr), addr);
+
+	if (t->verbose)
+		Printf(" %d bytes to %s", cc, inet_ntoa (ip->ip_dst));
+}
 
 void
 usage(void)

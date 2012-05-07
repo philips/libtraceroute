@@ -36,19 +36,41 @@ struct grehdr {
 /* For GRE, we prepare what looks like a PPTP packet */
 #define GRE_PPTP_PROTO	0x880b
 
-void	udp_prep(struct traceroute *, struct outdata *);
-int	udp_check(struct traceroute *, const u_char *, int);
-void	tcp_prep(struct traceroute *, struct outdata *);
-int	tcp_check(struct traceroute *, const u_char *, int);
-void	gre_prep(struct traceroute *, struct outdata *);
-int	gre_check(struct traceroute *, const u_char *, int);
-void	gen_prep(struct traceroute *, struct outdata *);
-int	gen_check(struct traceroute *, const u_char *, int);
-void	icmp_prep(struct traceroute *, struct outdata *);
-int	icmp_check(struct traceroute *, const u_char *, int);
+static void	udp_prep(struct traceroute *, struct outdata *);
+static int	udp_check(struct traceroute *, const u_char *, int);
+static void	tcp_prep(struct traceroute *, struct outdata *);
+static int	tcp_check(struct traceroute *, const u_char *, int);
+static void	gre_prep(struct traceroute *, struct outdata *);
+static int	gre_check(struct traceroute *, const u_char *, int);
+static void	gen_prep(struct traceroute *, struct outdata *);
+static int	gen_check(struct traceroute *, const u_char *, int);
+static void	icmp_prep(struct traceroute *, struct outdata *);
+static int	icmp_check(struct traceroute *, const u_char *, int);
 
+static struct hostinfo *gethostinfo(const char *hostname);
+
+/* Forwards */
+static void	freehostinfo(struct hostinfo *);
+static void	getaddr(u_int32_t *, char *);
+static struct	hostinfo *gethostinfo(const char *);
+static u_short	in_cksum(u_short *, int);
+static int	main(int, char **);
+static u_short p_cksum(struct ip *, u_short *, int);
+static char	*pr_type(u_char);
+#ifdef	IPSEC
+static int	setpolicy __P((int so, char *policy));
+#endif
+static struct outproto *setproto(char *);
+static int	str2val(const char *, const char *, int, int);
+static void	tvsub(struct timeval *, struct timeval *);
+static void usage(void);
+static void pkt_compare(const u_char *, int, const u_char *, int);
+#ifndef HAVE_USLEEP
+int	usleep(u_int);
+#endif
 static void send_probe(struct traceroute *, int, int);
 static double deltaT(struct timeval *t1p, struct timeval *t2p);
+static void	setsin(struct sockaddr_in *, u_int32_t);
 
 /* List of supported protocols. The first one is the default. The last
    one is the handler for generic protocols not explicitly listed. */

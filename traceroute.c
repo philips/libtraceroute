@@ -92,6 +92,12 @@ traceroute_init(struct traceroute *t)
 	t->ident = (getpid() & 0xffff) | 0x8000;
 }
 
+void
+traceroute_set_ident(struct traceroute *t, u_short ident)
+{
+	t->ident = ident;
+}
+
 int
 traceroute_set_hostname(struct traceroute *t, const char *hostname)
 {
@@ -232,6 +238,53 @@ traceroute_wait_for_reply(struct traceroute *t)
 	return(cc);
 }
 
+/*
+ * Construct an Internet address representation.
+ * If the nflag has been supplied, give
+ * numeric value, otherwise try for symbolic name.
+ */
+char *
+traceroute_inetname(struct traceroute *t, struct in_addr in)
+{
+	char *cp;
+	struct hostent *hp;
+	static int first = 1;
+	static char domain[MAXHOSTNAMELEN + 1], line[MAXHOSTNAMELEN + 1];
+
+	if (first && !t->nflag) {
+		first = 0;
+		if (gethostname(domain, sizeof(domain) - 1) < 0)
+			domain[0] = '\0';
+		else {
+			cp = strchr(domain, '.');
+			if (cp == NULL) {
+				hp = gethostbyname(domain);
+				if (hp != NULL)
+					cp = strchr(hp->h_name, '.');
+			}
+			if (cp == NULL)
+				domain[0] = '\0';
+			else {
+				++cp;
+				(void)strncpy(domain, cp, sizeof(domain) - 1);
+				domain[sizeof(domain) - 1] = '\0';
+			}
+		}
+	}
+	if (!t->nflag && in.s_addr != INADDR_ANY) {
+		hp = gethostbyaddr((char *)&in, sizeof(in), AF_INET);
+		if (hp != NULL) {
+			if ((cp = strchr(hp->h_name, '.')) != NULL &&
+			    strcmp(cp + 1, domain) == 0)
+				*cp = '\0';
+			(void)strncpy(line, hp->h_name, sizeof(line) - 1);
+			line[sizeof(line) - 1] = '\0';
+			return (line);
+		}
+	}
+	return (inet_ntoa(in));
+}
+
 static void
 send_probe(struct traceroute *t, int seq, int ttl)
 {
@@ -284,7 +337,7 @@ send_probe(struct traceroute *t, int seq, int ttl)
 }
 
 #if	defined(IPSEC) && defined(IPSEC_POLICY_IPSEC)
-int
+static int
 setpolicy(so, policy)
 	int so;
 	char *policy;
@@ -305,7 +358,7 @@ setpolicy(so, policy)
 }
 #endif
 
-double
+static double
 deltaT(struct timeval *t1p, struct timeval *t2p)
 {
 	double dt;
@@ -319,7 +372,7 @@ deltaT(struct timeval *t1p, struct timeval *t2p)
 /*
  * Convert an ICMP "type" field to a printable string.
  */
-char *
+static char *
 pr_type(u_char t)
 {
 	static char *ttab[] = {
@@ -398,7 +451,7 @@ traceroute_packet_code(struct traceroute *t, int cc)
 	return traceroute_packet_ok(t, cc) - 1;
 }
 
-void
+static void
 icmp_prep(struct traceroute *t, struct outdata *outdata)
 {
 	struct icmp *const icmpheader = (struct icmp *) t->outp;
@@ -412,7 +465,7 @@ icmp_prep(struct traceroute *t, struct outdata *outdata)
 		icmpheader->icmp_cksum = 0xffff;
 }
 
-int
+static int
 icmp_check(struct traceroute *t, const u_char *data, int seq)
 {
 	struct icmp *const icmpheader = (struct icmp *) data;
@@ -421,7 +474,7 @@ icmp_check(struct traceroute *t, const u_char *data, int seq)
 	    && icmpheader->icmp_seq == htons(seq));
 }
 
-void
+static void
 udp_prep(struct traceroute *t, struct outdata *outdata)
 {
 	struct udphdr *const outudp = (struct udphdr *) t->outp;
@@ -434,7 +487,7 @@ udp_prep(struct traceroute *t, struct outdata *outdata)
 	return;
 }
 
-int
+static int
 udp_check(struct traceroute *t, const u_char *data, int seq)
 {
 	struct udphdr *const udp = (struct udphdr *) data;
@@ -443,7 +496,7 @@ udp_check(struct traceroute *t, const u_char *data, int seq)
 	    ntohs(udp->uh_dport) == t->port + (t->fixedPort ? 0 : seq));
 }
 
-void
+static void
 tcp_prep(struct traceroute *t, struct outdata *outdata)
 {
 	struct tcphdr *const tcp = (struct tcphdr *) t->outp;
@@ -458,7 +511,7 @@ tcp_prep(struct traceroute *t, struct outdata *outdata)
 	tcp->th_sum = 0;
 }
 
-int
+static int
 tcp_check(struct traceroute *t, const u_char *data, int seq)
 {
 	struct tcphdr *const tcp = (struct tcphdr *) data;
@@ -468,7 +521,7 @@ tcp_check(struct traceroute *t, const u_char *data, int seq)
 	    && tcp->th_seq == (((tcp_seq)t->ident << 16) | (t->port + seq));
 }
 
-void
+static void
 gre_prep(struct traceroute *t, struct outdata *outdata)
 {
 	struct grehdr *const gre = (struct grehdr *) t->outp;
@@ -479,7 +532,7 @@ gre_prep(struct traceroute *t, struct outdata *outdata)
 	gre->callId = htons(t->ident + outdata->seq);
 }
 
-int
+static int
 gre_check(struct traceroute *t, const u_char *data, int seq)
 {
 	struct grehdr *const gre = (struct grehdr *) data;
@@ -488,7 +541,7 @@ gre_check(struct traceroute *t, const u_char *data, int seq)
 	    && ntohs(gre->callId) == t->ident + seq);
 }
 
-void
+static void
 gen_prep(struct traceroute *t, struct outdata *outdata)
 {
 	u_int16_t *const ptr = (u_int16_t *) t->outp;
@@ -497,7 +550,7 @@ gen_prep(struct traceroute *t, struct outdata *outdata)
 	ptr[1] = htons(t->port + outdata->seq);
 }
 
-int
+static int
 gen_check(struct traceroute *t, const u_char *data, int seq)
 {
 	u_int16_t *const ptr = (u_int16_t *) data;
@@ -506,32 +559,10 @@ gen_check(struct traceroute *t, const u_char *data, int seq)
 	    && ntohs(ptr[1]) == t->port + seq);
 }
 
-void
-print(struct traceroute *t, u_char *buf, int cc, struct sockaddr_in *from)
-{
-	struct ip *ip;
-	int hlen;
-	char addr[INET_ADDRSTRLEN];
-
-	ip = (struct ip *) buf;
-	hlen = ip->ip_hl << 2;
-	cc -= hlen;
-
-	strncpy(addr, inet_ntoa(from->sin_addr), sizeof(addr));
-
-	if (t->nflag)
-		Printf(" %s", addr);
-	else
-		Printf(" %s (%s)", inetname(t, from->sin_addr), addr);
-
-	if (t->verbose)
-		Printf(" %d bytes to %s", cc, inet_ntoa (ip->ip_dst));
-}
-
 /*
  * Checksum routine for Internet Protocol family headers (C Version)
  */
-u_short
+static u_short
 in_cksum(u_short *addr, int len)
 {
 	int nleft = len;
@@ -567,7 +598,7 @@ in_cksum(u_short *addr, int len)
  * Subtract 2 timeval structs:  out = out - in.
  * Out is assumed to be within about LONG_MAX seconds of in.
  */
-void
+static void
 tvsub(struct timeval *out, struct timeval *in)
 {
 
@@ -578,54 +609,7 @@ tvsub(struct timeval *out, struct timeval *in)
 	out->tv_sec -= in->tv_sec;
 }
 
-/*
- * Construct an Internet address representation.
- * If the nflag has been supplied, give
- * numeric value, otherwise try for symbolic name.
- */
-char *
-inetname(struct traceroute *t, struct in_addr in)
-{
-	char *cp;
-	struct hostent *hp;
-	static int first = 1;
-	static char domain[MAXHOSTNAMELEN + 1], line[MAXHOSTNAMELEN + 1];
-
-	if (first && !t->nflag) {
-		first = 0;
-		if (gethostname(domain, sizeof(domain) - 1) < 0)
-			domain[0] = '\0';
-		else {
-			cp = strchr(domain, '.');
-			if (cp == NULL) {
-				hp = gethostbyname(domain);
-				if (hp != NULL)
-					cp = strchr(hp->h_name, '.');
-			}
-			if (cp == NULL)
-				domain[0] = '\0';
-			else {
-				++cp;
-				(void)strncpy(domain, cp, sizeof(domain) - 1);
-				domain[sizeof(domain) - 1] = '\0';
-			}
-		}
-	}
-	if (!t->nflag && in.s_addr != INADDR_ANY) {
-		hp = gethostbyaddr((char *)&in, sizeof(in), AF_INET);
-		if (hp != NULL) {
-			if ((cp = strchr(hp->h_name, '.')) != NULL &&
-			    strcmp(cp + 1, domain) == 0)
-				*cp = '\0';
-			(void)strncpy(line, hp->h_name, sizeof(line) - 1);
-			line[sizeof(line) - 1] = '\0';
-			return (line);
-		}
-	}
-	return (inet_ntoa(in));
-}
-
-struct hostinfo *
+static struct hostinfo *
 gethostinfo(const char *hostname)
 {
 	int n;
@@ -682,7 +666,7 @@ gethostinfo(const char *hostname)
 	return (hi);
 }
 
-void
+static void
 freehostinfo(struct hostinfo *hi)
 {
 	if (hi->name != NULL) {
@@ -693,7 +677,7 @@ freehostinfo(struct hostinfo *hi)
 	free((char *)hi);
 }
 
-void
+static void
 getaddr(u_int32_t *ap, char *hostname)
 {
 	struct hostinfo *hi;
@@ -703,7 +687,7 @@ getaddr(u_int32_t *ap, char *hostname)
 	freehostinfo(hi);
 }
 
-void
+static void
 setsin(struct sockaddr_in *sin, u_int32_t addr)
 {
 
@@ -715,7 +699,7 @@ setsin(struct sockaddr_in *sin, u_int32_t addr)
 	sin->sin_addr.s_addr = addr;
 }
 
-struct outproto *
+static struct outproto *
 setproto(char *pname)
 {
 	struct outproto *proto;
