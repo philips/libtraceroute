@@ -68,7 +68,7 @@ static void pkt_compare(const u_char *, int, const u_char *, int);
 #ifndef HAVE_USLEEP
 int	usleep(u_int);
 #endif
-static void send_probe(struct traceroute *, int, int);
+static int send_probe(struct traceroute *, int, int);
 static double deltaT(struct timeval *t1p, struct timeval *t2p);
 static void	setsin(struct sockaddr_in *, u_int32_t);
 

@@ -93,10 +93,14 @@ main(int argc, char **argv)
 		return ret;
 	}
 
-	if (argc == 2) {
-		traceroute_set_hostname(t, argv[1]);
-	} else {
+	if (argc != 2) {
 		fprintf(stderr, "usage: traceroute hostname\n");
+		return 1;
+	}
+
+	ret = traceroute_set_hostname(t, argv[1]);
+	if (ret < 0) {
+		fprintf(stderr, "traceroute_set_hostname failed\n");
 		return 1;
 	}
 

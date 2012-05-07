@@ -37,7 +37,7 @@ traceroute_free(struct traceroute *t)
 	return free(t);
 }
 
-void
+struct ip *
 traceroute__init_outip(struct traceroute *t)
 {
 	u_short off = 0;
@@ -46,10 +46,9 @@ traceroute__init_outip(struct traceroute *t)
 		free(t->outip);
 
 	t->outip = (struct ip *)malloc((unsigned)t->packlen);
-	if (t->outip == NULL) {
-		Fprintf(stderr, "%s: malloc: %s\n", prog, strerror(errno));
-		exit(1);
-	}
+	if (t->outip == NULL)
+		return t->outip;
+
 	memset((char *)t->outip, 0, t->packlen);
 
 	t->outip->ip_v = IPVERSION;
@@ -67,6 +66,7 @@ traceroute__init_outip(struct traceroute *t)
 	t->outip->ip_hl = (t->outp - (u_char *)t->outip) >> 2;
 
 	t->outip->ip_src = t->from->sin_addr;
+	return t->outip;
 }
 
 void
@@ -102,18 +102,20 @@ int
 traceroute_set_hostname(struct traceroute *t, const char *hostname)
 {
 	struct hostinfo *hi;
+	struct ip *outip;
 	struct sockaddr_in *to = (struct sockaddr_in *)&t->whereto;
 
 	hi = gethostinfo(hostname);
 	setsin(to, hi->addrs[0]);
-	if (hi->n > 1)
-		Fprintf(stderr,
-	    "%s: Warning: %s has multiple addresses; using %s\n",
-			prog, t->hostname, inet_ntoa(to->sin_addr));
 	t->hostname = hi->name;
 	hi->name = NULL;
 	freehostinfo(hi);
-	traceroute__init_outip(t);
+
+	outip = traceroute__init_outip(t);
+	if (outip == NULL)
+		return -1;
+
+	return 0;
 }
 
 int
@@ -125,14 +127,11 @@ traceroute_set_proto(struct traceroute *t, const char *cp)
 	pe = getprotobyname(cp);
 	if (pe) {
 		if ((t->s = socket(AF_INET, SOCK_RAW, pe->p_proto)) < 0) {
-			Fprintf(stderr, "%s: icmp socket: %s\n", prog, strerror(errno));
 			return -errno;
 		} else if ((t->sndsock = socket(AF_INET, SOCK_RAW, IPPROTO_RAW)) < 0) {
-			Fprintf(stderr, "%s: raw socket: %s\n", prog, strerror(errno));
 			return -errno;
 		}
 	} else if (pe == NULL) {
-		Fprintf(stderr, "%s: unknown protocol %s\n", prog, cp);
 		return -EINVAL;
 	}
 
@@ -185,7 +184,7 @@ traceroute_send_probe(struct traceroute *t, int ttl, int seq)
 
 	/* Finalize and send packet */
 	(*t->proto->prepare)(t, o);
-	send_probe(t, seq, ttl);
+	return send_probe(t, seq, ttl);
 }
 
 int
@@ -285,7 +284,7 @@ traceroute_inetname(struct traceroute *t, struct in_addr in)
 	return (inet_ntoa(in));
 }
 
-static void
+static int
 send_probe(struct traceroute *t, int seq, int ttl)
 {
 	int cc;
@@ -293,47 +292,22 @@ send_probe(struct traceroute *t, int seq, int ttl)
 	t->outip->ip_ttl = ttl;
 	t->outip->ip_id = htons(t->ident + seq);
 
-	/* XXX undocumented debugging hack */
-	if (t->verbose > 1) {
-		const u_short *sp;
-		int nshorts, i;
-
-		sp = (u_short *)t->outip;
-		nshorts = (u_int)t->packlen / sizeof(u_short);
-		i = 0;
-		Printf("[ %d bytes", t->packlen);
-		while (--nshorts >= 0) {
-			if ((i++ % 8) == 0)
-				Printf("\n\t");
-			Printf(" %04x", ntohs(*sp++));
-		}
-		if (t->packlen & 1) {
-			if ((i % 8) == 0)
-				Printf("\n\t");
-			Printf(" %02x", *(u_char *)sp);
-		}
-		Printf("]\n");
-	}
-
 #if !defined(IP_HDRINCL) && defined(IP_TTL)
 	if (setsockopt(t->sndsock, IPPROTO_IP, IP_TTL,
 	    (char *)&ttl, sizeof(ttl)) < 0) {
-		Fprintf(stderr, "%s: setsockopt ttl %d: %s\n",
-		    prog, ttl, strerror(errno));
-		exit(1);
+		return -1;
 	}
 #endif
 
 	cc = sendto(t->sndsock, (char *)t->outip,
 	    t->packlen, 0, &t->whereto, sizeof(t->whereto));
-	if (cc < 0 || cc != t->packlen)  {
-		if (cc < 0)
-			Fprintf(stderr, "%s: sendto: %s\n",
-			    prog, strerror(errno));
-		Printf("%s: wrote %s %d chars, ret=%d\n",
-		    prog, t->hostname, t->packlen, cc);
-		(void)fflush(stdout);
-	}
+	if (cc < 0)
+		return errno;
+
+	if (cc != t->packlen)
+		return -2;
+
+	return 0;
 }
 
 #if	defined(IPSEC) && defined(IPSEC_POLICY_IPSEC)
@@ -402,9 +376,6 @@ traceroute_packet_ok(struct traceroute *t, int cc)
 	ip = (struct ip *) t->packet;
 	hlen = ip->ip_hl << 2;
 	if (cc < hlen + ICMP_MINLEN) {
-		if (t->verbose)
-			Printf("packet too short (%d bytes) from %s\n", cc,
-				inet_ntoa(t->from->sin_addr));
 		return 0;
 	}
 	cc -= hlen;
@@ -618,51 +589,57 @@ gethostinfo(const char *hostname)
 	char **p;
 	u_int32_t addr, *ap;
 
-	if (strlen(hostname) >= MAXHOSTNAMELEN) {
-		Fprintf(stderr, "%s: hostname \"%.32s...\" is too long\n",
-		    prog, hostname);
-		exit(1);
-	}
+	if (strlen(hostname) >= MAXHOSTNAMELEN)
+		return NULL;
+
 	hi = calloc(1, sizeof(*hi));
-	if (hi == NULL) {
-		Fprintf(stderr, "%s: calloc %s\n", prog, strerror(errno));
-		exit(1);
-	}
+	if (hi == NULL)
+		return NULL;
+
 	addr = inet_addr(hostname);
 	if ((int32_t)addr != -1) {
 		hi->name = strdup(hostname);
 		hi->n = 1;
 		hi->addrs = calloc(1, sizeof(hi->addrs[0]));
-		if (hi->addrs == NULL) {
-			Fprintf(stderr, "%s: calloc %s\n",
-			    prog, strerror(errno));
-			exit(1);
-		}
+
+		if (hi->addrs == NULL)
+			goto free_hi;
+
 		hi->addrs[0] = addr;
-		return (hi);
+		return hi;
 	}
 
 	hp = gethostbyname(hostname);
-	if (hp == NULL) {
-		Fprintf(stderr, "%s: unknown host %s\n", prog, hostname);
-		exit(1);
-	}
-	if (hp->h_addrtype != AF_INET || hp->h_length != 4) {
-		Fprintf(stderr, "%s: bad host %s\n", prog, hostname);
-		exit(1);
-	}
+
+	if (hp == NULL)
+		goto free_hi;
+
+	if (hp->h_addrtype != AF_INET || hp->h_length != 4)
+		goto free_hi;
+
 	hi->name = strdup(hp->h_name);
 	for (n = 0, p = hp->h_addr_list; *p != NULL; ++n, ++p)
 		continue;
+
 	hi->n = n;
+
 	hi->addrs = calloc(n, sizeof(hi->addrs[0]));
-	if (hi->addrs == NULL) {
-		Fprintf(stderr, "%s: calloc %s\n", prog, strerror(errno));
-		exit(1);
-	}
+	if (hi->addrs == NULL)
+		goto free_hi;
+
 	for (ap = hi->addrs, p = hp->h_addr_list; *p != NULL; ++ap, ++p) {
 		memcpy(ap, *p, sizeof(*ap));
 	}
+
+	return (hi);
+
+free_hi_addrs:
+	free(hi->addrs);
+
+free_hi:
+	free(hi);
+	hi = NULL;
+
 	return (hi);
 }
 
