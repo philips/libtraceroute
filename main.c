@@ -105,22 +105,26 @@ main(int argc, char **argv)
 		int gotlastaddr = 0;
 		int got_there = 0;
 		int unreachable = 0;
-		int sentfirst = 0;
 		int loss = 0;;
+		int sleep_for = 1000;
+		int max_sleep = 100;
 
 		Printf("%2d ", t->ttl);
 		for (probe = 0; probe < t->nprobes; ++probe) {
 			int cc;
 			struct ip *ip;
-
-			if (sentfirst && t->pausemsecs > 0)
-				usleep(t->pausemsecs * 1000);
-			++sentfirst;
+			int slept = 0;
 
 			traceroute_send_next_probe(t);
 
 			/* Wait for a reply */
 			cc = traceroute_wait_for_reply(t);
+			while (cc == 0 && slept < max_sleep) {
+				usleep(sleep_for);
+				slept++;
+				cc = traceroute_wait_for_reply(t);
+			}
+
 			while (cc != 0) {
 				double T;
 				int precis;
@@ -128,7 +132,7 @@ main(int argc, char **argv)
 				i = traceroute_packet_ok(t, cc);
 				/* Skip short packet */
 				if (i == 0)
-					continue;
+					break;
 				if (!gotlastaddr ||
 				    t->from->sin_addr.s_addr != lastaddr) {
 					if (gotlastaddr) printf("\n   ");
@@ -170,7 +174,8 @@ main(int argc, char **argv)
 				/* time exceeded in transit */
 				if (i == -1)
 					break;
-				code = i - 1;
+
+				code = traceroute_packet_code(t, cc);
 				switch (code) {
 
 				case ICMP_UNREACH_PORT:

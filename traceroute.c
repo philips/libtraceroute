@@ -78,13 +78,12 @@ traceroute_init(struct traceroute *t)
 	t->hip = NULL;
 	t->hiplen = 0;
 	t->maxpacket = 32 * 1024;
-	t->nprobes = -1;
 	t->max_ttl = 30;
 	t->first_ttl = 1;
 	t->waittime = 5;
 	t->as_server = NULL;
 	t->fixedPort = 0;
-	t->nprobes = 3;
+	t->nprobes = 1;
 
 	t->minpacket = sizeof(*t->outip) + t->proto->hdrlen + sizeof(struct outdata) + t->optlen;
 	t->packlen = t->minpacket;			/* minimum sized packet */
@@ -214,14 +213,8 @@ traceroute_wait_for_reply(struct traceroute *t)
 	memset(fdsp, 0, nfds * sizeof(fd_mask));
 	FD_SET(sock, fdsp);
 
-	wait.tv_sec = tp->tv_sec + t->waittime;
-	wait.tv_usec = tp->tv_usec;
-	(void)gettimeofday(&now, NULL);
-	tvsub(&wait, &now);
-	if (wait.tv_sec < 0) {
-		wait.tv_sec = 0;
-		wait.tv_usec = 0;
-	}
+	wait.tv_sec = 0;
+	wait.tv_usec = 0;
 
 	error = select(sock + 1, fdsp, NULL, NULL, &wait);
 	if (error == -1 && errno == EINVAL) {
@@ -359,7 +352,7 @@ traceroute_packet_ok(struct traceroute *t, int cc)
 		if (t->verbose)
 			Printf("packet too short (%d bytes) from %s\n", cc,
 				inet_ntoa(t->from->sin_addr));
-		return (0);
+		return 0;
 	}
 	cc -= hlen;
 	icp = (struct icmp *)(buf + hlen);
@@ -396,7 +389,13 @@ traceroute_packet_ok(struct traceroute *t, int cc)
 			return (type == ICMP_TIMXCEED ? -1 : code + 1);
 	}
 
-	return(0);
+	return 0;
+}
+
+int
+traceroute_packet_code(struct traceroute *t, int cc)
+{
+	return traceroute_packet_ok(t, cc) - 1;
 }
 
 void
